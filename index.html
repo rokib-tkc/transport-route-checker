@@ -194,13 +194,6 @@
 
   <script>
     // ============================================================
-    // GLOBAL DATA
-    // ============================================================
-
-    let routingData = [];
-    let dataLoaded = false;
-
-    // ============================================================
     // CHANNEL RULES
     // ============================================================
 
@@ -232,7 +225,7 @@
     };
 
     // ============================================================
-    // CSV LOADING (FROM SAME SITE)
+    // CSV PARSING
     // ============================================================
 
     function parseCsv(text) {
@@ -267,33 +260,15 @@
       return result;
     }
 
-    function loadRoutingData() {
-      fetch("routes.csv")
-        .then(response => {
-          if (!response.ok) {
-            throw new Error("Failed to load routes.csv");
-          }
-          return response.text();
-        })
-        .then(text => {
-          routingData = parseCsv(text);
-          dataLoaded = true;
-        })
-        .catch(err => {
-          console.error("Error loading routes.csv:", err);
-          dataLoaded = false;
-        });
-    }
-
     // ============================================================
-    // CORE LOGIC
+    // CORE HELPERS
     // ============================================================
 
     function normaliseInputPostcode(raw) {
       return raw ? raw.toUpperCase().replace(/\s+/g, "") : "";
     }
 
-    function findBestMatchingPrefix(cleaned) {
+    function findBestMatchingPrefix(routingData, cleaned) {
       const prefixes = [...new Set(routingData.map(r => r.prefix))];
       const matches = prefixes.filter(p => cleaned.startsWith(p));
       return matches.sort((a, b) => b.length - a.length)[0] || null;
@@ -358,8 +333,8 @@
             </div>
             <table>
               <colgroup>
-                <col style="width: 25%">
                 <col style="width: 35%">
+                <col style="width: 25%">
                 <col style="width: 20%">
                 <col style="width: 20%">
               </colgroup>
@@ -433,15 +408,10 @@
     }
 
     // ============================================================
-    // SEARCH HANDLING
+    // SEARCH HANDLING (FETCH ON EACH SEARCH)
     // ============================================================
 
     function performSearch() {
-      if (!dataLoaded) {
-        alert("Routing data is not available. Please refresh the page and try again.");
-        return;
-      }
-
       const input = document.getElementById("postcodeInput").value.trim();
       if (!input) {
         alert("Please enter a postcode or prefix.");
@@ -449,17 +419,35 @@
       }
 
       const cleaned = normaliseInputPostcode(input);
-      const bestPrefix = findBestMatchingPrefix(cleaned);
 
-      if (!bestPrefix) {
-        document.getElementById("resultsContainer").innerHTML = "";
-        document.getElementById("resultsMeta").style.display = "none";
-        document.getElementById("noResults").style.display = "block";
-        return;
-      }
+      // Add cache-busting query param so browser doesn't serve stale CSV
+      const url = "routes.csv?cb=" + Date.now();
 
-      const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
-      buildResultsHTML(matchingRows, bestPrefix, input);
+      fetch(url)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("Failed to load routes.csv");
+          }
+          return response.text();
+        })
+        .then(text => {
+          const routingData = parseCsv(text);
+          const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
+
+          if (!bestPrefix) {
+            document.getElementById("resultsContainer").innerHTML = "";
+            document.getElementById("resultsMeta").style.display = "none";
+            document.getElementById("noResults").style.display = "block";
+            return;
+          }
+
+          const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
+          buildResultsHTML(matchingRows, bestPrefix, input);
+        })
+        .catch(err => {
+          console.error("Error loading routes.csv:", err);
+          alert("Routing data is not available at the moment. Please try again in a moment or contact the system owner.");
+        });
     }
 
     document.getElementById("searchButton").onclick = performSearch;
@@ -469,9 +457,6 @@
         performSearch();
       }
     });
-
-    // Load CSV on page load
-    loadRoutingData();
   </script>
 </body>
 </html>
