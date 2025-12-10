@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Transport Route Checker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+      color: #222;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+      text-align: center;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .search-section {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .search-section label {
+      font-weight: bold;
+    }
+
+    .search-input-wrapper {
+      flex: 1 1 200px;
+      display: flex;
+      gap: 8px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 14px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      background: #0078d4;
+      color: #fff;
+    }
+
+    button:hover {
+      background: #005ea3;
+    }
+
+    .results-header {
+      margin-top: 10px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .no-results,
+    .error-box,
+    .status-box {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 13px;
+    }
+
+    .no-results {
+      background: #ffe5e5;
+      color: #a00;
+    }
+
+    .error-box {
+      background: #ffe5e5;
+      color: #a00;
+      border: 1px solid #dd6666;
+    }
+
+    .status-box {
+      background: #eef6ff;
+      color: #004b8d;
+      border: 1px solid #a8c7ff;
+    }
+
+    .channel-block {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+    }
+
+    .channel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .channel-title {
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    .channel-rules-trigger {
+      font-size: 12px;
+      color: #0078d4;
+      text-decoration: underline;
+      cursor: help;
+      white-space: nowrap;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 5px;
+      font-size: 13px;
+      table-layout: fixed;
+    }
+
+    th, td {
+      padding: 6px 8px;
+      border: 1px solid #ddd;
+      text-align: left;
+      overflow-wrap: break-word;
+    }
+
+    th {
+      background: #f0f0f0;
+      font-weight: bold;
+    }
+
+    .lead-time {
+      white-space: nowrap;
+    }
+
+    #channelTooltip {
+      position: fixed;
+      z-index: 9999;
+      max-width: 320px;
+      padding: 10px;
+      background: #ffffff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      font-size: 12px;
+      line-height: 1.4;
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      .search-section {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .search-input-wrapper {
+        width: 100%;
+      }
+      button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Transport Route Checker</h1>
+
+    <div class="search-section">
+      <label for="postcodeInput">Postcode prefix:</label>
+      <div class="search-input-wrapper">
+        <input id="postcodeInput" type="text" placeholder="e.g. M34" autocomplete="off">
+        <button id="searchButton">Search</button>
+      </div>
+    </div>
+
+    <div id="dataStatus" class="status-box">
+      Loading routing data from routes.csv …
+    </div>
+
+    <div id="resultsMeta" class="results-header" style="display:none;"></div>
+    <div id="resultsContainer"></div>
+
+    <div id="noResults" class="no-results" style="display:none;">
+      No routing information found for that postcode prefix.
+    </div>
+
+    <div id="loadError" class="error-box" style="display:none;">
+      Unable to load routing data. Please check routes.csv is present and correctly formatted.
+    </div>
+  </div>
+
+  <!-- Shared tooltip element -->
+  <div id="channelTooltip"></div>
+
+  <script>
+    // ============================================================
+    // GLOBAL DATA
+    // ============================================================
+
+    let routingData = [];
+    let dataLoaded = false;
+
+    const dataStatusEl = document.getElementById("dataStatus");
+    const loadErrorEl = document.getElementById("loadError");
+
+    // ============================================================
+    // CHANNEL RULES
+    // ============================================================
+
+    const channelRules = {
+      "Component Channel": `
+        <strong>Component Channel rules</strong><br>
+        - One-person delivery only.<br>
+        - Standard lead times apply as shown.<br>
+        - Bulky or palletised items may be subject to capacity limits.
+      `,
+      "Jigsaw Channel": `
+        <strong>Jigsaw Channel rules</strong><br>
+        - Two-person delivery service only.<br>
+        - Customer must be available to accept delivery on booked day.<br>
+        - Access restrictions must be advised in advance.
+      `,
+      "Merchant Channel": `
+        <strong>Merchant Channel rules</strong><br>
+        - Trade/merchant customers only.<br>
+        - Tail-lift access required for heavy goods.<br>
+        - Deliveries may be consolidated with other merchant drops.
+      `,
+      "Retail Channel": `
+        <strong>Retail Channel rules</strong><br>
+        - Longer lead times for retail orders.<br>
+        - Delivery date is indicative and may vary with carrier capacity.<br>
+        - Re-delivery charges may apply if delivery is missed.
+      `
+    };
+
+    // ============================================================
+    // CSV LOADING (FROM SAME SITE)
+    // ============================================================
+
+    function parseCsv(text) {
+      const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+      if (lines.length === 0) return [];
+
+      const headers = lines[0].split(",").map(h => h.trim());
+      const dataLines = lines.slice(1);
+
+      const result = dataLines.map(line => {
+        const cols = line.split(",");
+        const row = {};
+        headers.forEach((h, i) => {
+          row[h] = (cols[i] || "").trim();
+        });
+
+        const daysArray = (row.days || "")
+          .split("|")
+          .map(d => d.trim())
+          .filter(Boolean);
+
+        return {
+          prefix: (row.prefix || "").toUpperCase().replace(/\s+/g, ""),
+          route: row.route || "",
+          channel: row.channel || "",
+          serviceType: row.serviceType || "",
+          leadTime: row.leadTime || "",
+          days: daysArray
+        };
+      });
+
+      return result;
+    }
+
+    function loadRoutingData() {
+      // GitHub Pages serves index.html and routes.csv from same origin
+      fetch("routes.csv")
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("HTTP " + response.status + " " + response.statusText);
+          }
+          return response.text();
+        })
+        .then(text => {
+          routingData = parseCsv(text);
+          dataLoaded = true;
+
+          dataStatusEl.style.display = "block";
+          dataStatusEl.textContent = "Routing data loaded: " + routingData.length + " rows.";
+          loadErrorEl.style.display = "none";
+        })
+        .catch(err => {
+          console.error("Error loading routes.csv:", err);
+          dataLoaded = false;
+          dataStatusEl.style.display = "none";
+          loadErrorEl.style.display = "block";
+        });
+    }
+
+    // ============================================================
+    // CORE LOGIC
+    // ============================================================
+
+    function normaliseInputPostcode(raw) {
+      return raw ? raw.toUpperCase().replace(/\s+/g, "") : "";
+    }
+
+    function findBestMatchingPrefix(cleaned) {
+      const prefixes = [...new Set(routingData.map(r => r.prefix))];
+      const matches = prefixes.filter(p => cleaned.startsWith(p));
+      return matches.sort((a, b) => b.length - a.length)[0] || null;
+    }
+
+    function groupByChannel(rows) {
+      return rows.reduce((acc, r) => {
+        acc[r.channel] = acc[r.channel] || [];
+        acc[r.channel].push(r);
+        return acc;
+      }, {});
+    }
+
+    function sortDays(days) {
+      const order = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"];
+      return days.slice().sort((a, b) => {
+        const aIndex = order.indexOf(String(a).toUpperCase());
+        const bIndex = order.indexOf(String(b).toUpperCase());
+        return aIndex - bIndex;
+      });
+    }
+
+    function buildResultsHTML(rows, usedPrefix, originalInput) {
+      const grouped = groupByChannel(rows);
+      const channels = Object.keys(grouped).sort();
+      const resultsContainer = document.getElementById("resultsContainer");
+      const resultsMeta = document.getElementById("resultsMeta");
+      const noResults = document.getElementById("noResults");
+
+      if (!channels.length) {
+        resultsMeta.style.display = "none";
+        resultsContainer.innerHTML = "";
+        noResults.style.display = "block";
+        return;
+      }
+
+      noResults.style.display = "none";
+      resultsMeta.style.display = "block";
+      resultsMeta.textContent =
+        `Results for postcode: ${originalInput || usedPrefix} (matched prefix: ${usedPrefix})`;
+
+      let html = "";
+
+      channels.forEach(channel => {
+        const rowsForChannel = grouped[channel];
+
+        const route = rowsForChannel[0].route;
+        const serviceType = rowsForChannel[0].serviceType;
+        const leadTime = rowsForChannel[0].leadTime;
+
+        const allDays = sortDays(
+          [...new Set(rowsForChannel.flatMap(r => r.days))]
+        );
+
+        html += `
+          <div class="channel-block">
+            <div class="channel-header">
+              <div class="channel-title">${channel}</div>
+              <div class="channel-rules-trigger" data-channel="${channel}">
+                Hover here for channel rules
+              </div>
+            </div>
+            <table>
+              <colgroup>
+                <col style="width: 25%">
+                <col style="width: 35%">
+                <col style="width: 20%">
+                <col style="width: 20%">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Route</th>
+                  <th>Delivery Days</th>
+                  <th>Delivery Type</th>
+                  <th>Lead Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>${route}</td>
+                  <td>${allDays.join(", ")}</td>
+                  <td>${serviceType}</td>
+                  <td class="lead-time">${leadTime}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        `;
+      });
+
+      resultsContainer.innerHTML = html;
+      attachChannelRuleEvents();
+    }
+
+    // ============================================================
+    // TOOLTIP HANDLING
+    // ============================================================
+
+    function attachChannelRuleEvents() {
+      const triggers = document.querySelectorAll(".channel-rules-trigger");
+      const tooltip = document.getElementById("channelTooltip");
+
+      function positionTooltip(e) {
+        const offset = 12;
+        let x = e.clientX + offset;
+        let y = e.clientY + offset;
+
+        tooltip.style.left = x + "px";
+        tooltip.style.top = y + "px";
+
+        const rect = tooltip.getBoundingClientRect();
+        if (rect.right > window.innerWidth - 10) {
+          x = e.clientX - rect.width - offset;
+          tooltip.style.left = x + "px";
+        }
+        if (rect.bottom > window.innerHeight - 10) {
+          y = e.clientY - rect.height - offset;
+          tooltip.style.top = y + "px";
+        }
+      }
+
+      triggers.forEach(trigger => {
+        trigger.addEventListener("mouseenter", e => {
+          const channel = trigger.getAttribute("data-channel");
+          const content = channelRules[channel] || "No rules defined for this channel.";
+          tooltip.innerHTML = content;
+          tooltip.style.display = "block";
+          positionTooltip(e);
+        });
+
+        trigger.addEventListener("mousemove", positionTooltip);
+
+        trigger.addEventListener("mouseleave", () => {
+          tooltip.style.display = "none";
+        });
+      });
+    }
+
+    // ============================================================
+    // SEARCH HANDLING
+    // ============================================================
+
+    function performSearch() {
+      if (!dataLoaded) {
+        alert("Routing data has not loaded yet or failed to load.");
+        return;
+      }
+
+      const input = document.getElementById("postcodeInput").value.trim();
+      if (!input) {
+        alert("Please enter a postcode or prefix.");
+        return;
+      }
+
+      const cleaned = normaliseInputPostcode(input);
+      const bestPrefix = findBestMatchingPrefix(cleaned);
+
+      if (!bestPrefix) {
+        document.getElementById("resultsContainer").innerHTML = "";
+        document.getElementById("resultsMeta").style.display = "none";
+        document.getElementById("noResults").style.display = "block";
+        return;
+      }
+
+      const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
+      buildResultsHTML(matchingRows, bestPrefix, input);
+    }
+
+    document.getElementById("searchButton").onclick = performSearch;
+    document.getElementById("postcodeInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        performSearch();
+      }
+    });
+
+    // Load CSV on page load
+    loadRoutingData();
+  </script>
+</body>
+</html>

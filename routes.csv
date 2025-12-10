@@ -1,0 +1,9 @@
+﻿prefix,route,channel,serviceType,leadTime,days
+M3,TKC01 Manchester North,Component Channel,One-person,2 working days,Wednesday|Friday
+M3,TKC01 Manchester North,Jigsaw Channel,Two-person,5 working days,Wednesday|Friday
+M3,TKC01 Manchester North,Merchant Channel,Two-person,5 working days,Wednesday|Friday
+M3,TKC01 Manchester North,Retail Channel,Two-person,21 working days,Wednesday|Friday
+M34,TKC01 Manchester,Component Channel,One-person,2 working days,Monday|Wednesday|Friday
+M34,TKC01 Manchester,Jigsaw Channel,Two-person,5 working days,Monday|Wednesday|Friday
+M34,TKC01 Manchester,Merchant Channel,Two-person,5 working days,Monday|Wednesday|Friday
+M34,TKC01 Manchester,Retail Channel,Two-person,21 working days,Monday|Wednesday|Friday
