@@ -78,30 +78,13 @@
       font-weight: bold;
     }
 
-    .no-results,
-    .error-box,
-    .status-box {
+    .no-results {
       margin-top: 10px;
       padding: 10px;
       border-radius: 5px;
       font-size: 13px;
-    }
-
-    .no-results {
       background: #ffe5e5;
       color: #a00;
-    }
-
-    .error-box {
-      background: #ffe5e5;
-      color: #a00;
-      border: 1px solid #dd6666;
-    }
-
-    .status-box {
-      background: #eef6ff;
-      color: #004b8d;
-      border: 1px solid #a8c7ff;
     }
 
     .channel-block {
@@ -198,19 +181,11 @@
       </div>
     </div>
 
-    <div id="dataStatus" class="status-box">
-      Loading routing data from routes.csv …
-    </div>
-
     <div id="resultsMeta" class="results-header" style="display:none;"></div>
     <div id="resultsContainer"></div>
 
     <div id="noResults" class="no-results" style="display:none;">
       No routing information found for that postcode prefix.
-    </div>
-
-    <div id="loadError" class="error-box" style="display:none;">
-      Unable to load routing data. Please check routes.csv is present and correctly formatted.
     </div>
   </div>
 
@@ -224,9 +199,6 @@
 
     let routingData = [];
     let dataLoaded = false;
-
-    const dataStatusEl = document.getElementById("dataStatus");
-    const loadErrorEl = document.getElementById("loadError");
 
     // ============================================================
     // CHANNEL RULES
@@ -296,27 +268,20 @@
     }
 
     function loadRoutingData() {
-      // GitHub Pages serves index.html and routes.csv from same origin
       fetch("routes.csv")
         .then(response => {
           if (!response.ok) {
-            throw new Error("HTTP " + response.status + " " + response.statusText);
+            throw new Error("Failed to load routes.csv");
           }
           return response.text();
         })
         .then(text => {
           routingData = parseCsv(text);
           dataLoaded = true;
-
-          dataStatusEl.style.display = "block";
-          dataStatusEl.textContent = "Routing data loaded: " + routingData.length + " rows.";
-          loadErrorEl.style.display = "none";
         })
         .catch(err => {
           console.error("Error loading routes.csv:", err);
           dataLoaded = false;
-          dataStatusEl.style.display = "none";
-          loadErrorEl.style.display = "block";
         });
     }
 
@@ -473,7 +438,7 @@
 
     function performSearch() {
       if (!dataLoaded) {
-        alert("Routing data has not loaded yet or failed to load.");
+        alert("Routing data is not available. Please refresh the page and try again.");
         return;
       }
 
