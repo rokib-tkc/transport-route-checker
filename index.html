@@ -194,41 +194,70 @@
 
   <script>
     // ============================================================
-    // CHANNEL RULES
+    // CHANNEL RULES (LOADED FROM channel_rules.csv)
     // ============================================================
 
-    const channelRules = {
-      "Component Channel": `
-        <strong>Component Channel rules</strong><br>
-        - One-person delivery only.<br>
-        - Standard lead times apply as shown.<br>
-        - Bulky or palletised items may be subject to capacity limits.
-      `,
-      "Jigsaw Channel": `
-        <strong>Jigsaw Channel rules</strong><br>
-        - Two-person delivery service only.<br>
-        - Customer must be available to accept delivery on booked day.<br>
-        - Access restrictions must be advised in advance.
-      `,
-      "Merchant Channel": `
-        <strong>Merchant Channel rules</strong><br>
-        - Trade/merchant customers only.<br>
-        - Tail-lift access required for heavy goods.<br>
-        - Deliveries may be consolidated with other merchant drops.
-      `,
-      "Retail Channel": `
-        <strong>Retail Channel rules</strong><br>
-        - Longer lead times for retail orders.<br>
-        - Delivery date is indicative and may vary with carrier capacity.<br>
-        - Re-delivery charges may apply if delivery is missed.
-      `
-    };
+    let channelRules = {};     // channel -> HTML content
+    let rulesLoaded = false;   // for diagnostics if needed
+
+    function parseRulesCsv(text) {
+      const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+      if (lines.length === 0) return {};
+
+      const headers = lines[0].split(",").map(h => h.trim());
+      const dataLines = lines.slice(1);
+      const channelIndex = headers.indexOf("channel");
+      const rulesIndex = headers.indexOf("rules");
+
+      const result = {};
+
+      dataLines.forEach(line => {
+        const cols = line.split(",");
+        const channel = (cols[channelIndex] || "").trim();
+        const rulesCell = (cols[rulesIndex] || "").trim();
+
+        if (!channel) return;
+
+        const parts = rulesCell
+          .split("|")
+          .map(p => p.trim())
+          .filter(Boolean);
+
+        let html = `<strong>${channel} rules</strong>`;
+        if (parts.length) {
+          html += "<br>" + parts.map(p => "- " + p).join("<br>");
+        }
+
+        result[channel] = html;
+      });
+
+      return result;
+    }
+
+    function loadChannelRules() {
+      fetch("channel_rules.csv")
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("Failed to load channel_rules.csv");
+          }
+          return response.text();
+        })
+        .then(text => {
+          channelRules = parseRulesCsv(text);
+          rulesLoaded = true;
+        })
+        .catch(err => {
+          console.error("Error loading channel_rules.csv:", err);
+          rulesLoaded = false;
+          channelRules = {}; // fall back to "No rules defined" text
+        });
+    }
 
     // ============================================================
-    // CSV PARSING
+    // CSV PARSING FOR ROUTES
     // ============================================================
 
-    function parseCsv(text) {
+    function parseRoutesCsv(text) {
       const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
       if (lines.length === 0) return [];
 
@@ -333,8 +362,8 @@
             </div>
             <table>
               <colgroup>
-                <col style="width: 35%">
                 <col style="width: 25%">
+                <col style="width: 35%">
                 <col style="width: 20%">
                 <col style="width: 20%">
               </colgroup>
@@ -408,7 +437,7 @@
     }
 
     // ============================================================
-    // SEARCH HANDLING (FETCH ON EACH SEARCH)
+    // SEARCH HANDLING (FETCH ROUTES ON EACH SEARCH)
     // ============================================================
 
     function performSearch() {
@@ -420,7 +449,7 @@
 
       const cleaned = normaliseInputPostcode(input);
 
-      // Add cache-busting query param so browser doesn't serve stale CSV
+      // cache-busting query param to avoid stale CSV
       const url = "routes.csv?cb=" + Date.now();
 
       fetch(url)
@@ -431,7 +460,7 @@
           return response.text();
         })
         .then(text => {
-          const routingData = parseCsv(text);
+          const routingData = parseRoutesCsv(text);
           const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
 
           if (!bestPrefix) {
@@ -457,6 +486,9 @@
         performSearch();
       }
     });
+
+    // Load channel rules once on page load
+    loadChannelRules();
   </script>
 </body>
 </html>
