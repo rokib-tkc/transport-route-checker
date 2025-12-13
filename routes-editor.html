@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Transport Routes Editor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+      color: #222;
+    }
+
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+      text-align: center;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: #555;
+      margin-bottom: 15px;
+    }
+
+    .status-bar {
+      font-size: 13px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      background: #eef6ff;
+      color: #004b8d;
+      border: 1px solid #a8c7ff;
+    }
+
+    .status-error {
+      background: #ffe5e5;
+      color: #a00;
+      border-color: #dd6666;
+    }
+
+    .section-title {
+      font-weight: bold;
+      margin-top: 15px;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .filters,
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    label {
+      font-size: 13px;
+    }
+
+    input[type="text"] {
+      padding: 6px 8px;
+      font-size: 13px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      padding: 6px 12px;
+      font-size: 13px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      background: #0078d4;
+      color: #fff;
+      white-space: nowrap;
+    }
+
+    button:hover {
+      background: #005ea3;
+    }
+
+    button.secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    button.secondary:hover {
+      background: #c8c8c8;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+
+    th, td {
+      padding: 4px 6px;
+      border: 1px solid #ddd;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      background: #f0f0f0;
+      font-weight: bold;
+    }
+
+    td input[type="text"] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 4px 5px;
+      font-size: 12px;
+      border-radius: 3px;
+      border: 1px solid #ccc;
+    }
+
+    .small-input {
+      max-width: 90px;
+    }
+
+    .checkbox-cell {
+      text-align: center;
+      width: 32px;
+    }
+
+    .add-row-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 5px;
+      margin-bottom: 8px;
+    }
+
+    .add-row-grid input[type="text"] {
+      width: 100%;
+    }
+
+    .help-text {
+      font-size: 11px;
+      color: #666;
+    }
+
+    @media (max-width: 800px) {
+      .add-row-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 600px) {
+      .filters,
+      .actions {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Transport Routes Editor</h1>
+    <div class="subtitle">
+      Admin tool to edit <code>routes.csv</code> used by the Transport Route Checker.
+      After editing, download the updated CSV and upload/commit it to GitHub.
+    </div>
+
+    <div id="status" class="status-bar">
+      Loading routes.csv …
+    </div>
+
+    <!-- Filters -->
+    <div class="section-title">Filters</div>
+    <div class="filters">
+      <label>
+        Prefix:
+        <input type="text" id="filterPrefix" placeholder="e.g. M34">
+      </label>
+      <label>
+        Route contains:
+        <input type="text" id="filterRoute" placeholder="e.g. TKC01 Manchester">
+      </label>
+      <button id="applyFiltersBtn">Apply filters</button>
+      <button id="clearFiltersBtn" class="secondary">Clear filters</button>
+      <span class="help-text">
+        Filters affect which rows are shown and edited, but all rows are included when you download routes.csv.
+      </span>
+    </div>
+
+    <!-- Actions -->
+    <div class="section-title">Actions</div>
+    <div class="actions">
+      <button id="deleteSelectedBtn" class="secondary">Delete selected rows</button>
+      <button id="downloadCsvBtn">Download updated routes.csv</button>
+    </div>
+
+    <!-- Table -->
+    <div class="section-title">Routes table</div>
+    <table>
+      <thead>
+        <tr>
+          <th class="checkbox-cell">
+            <input type="checkbox" id="selectAllRows">
+          </th>
+          <th>Prefix</th>
+          <th>Route</th>
+          <th>Channel</th>
+          <th>Delivery Type</th>
+          <th>Lead Time</th>
+          <th>Delivery Days (pipe separated)</th>
+        </tr>
+      </thead>
+      <tbody id="routesTableBody">
+        <!-- Populated by JS -->
+      </tbody>
+    </table>
+
+    <!-- Add row -->
+    <div class="section-title">Add new row</div>
+    <div class="add-row-grid">
+      <input type="text" id="addPrefix" placeholder="Prefix (e.g. M34)">
+      <input type="text" id="addRoute" placeholder="Route (e.g. TKC01 Manchester)">
+      <input type="text" id="addChannel" placeholder="Channel (e.g. Component Channel)">
+      <input type="text" id="addServiceType" placeholder="Delivery Type (e.g. One-person)">
+      <input type="text" id="addLeadTime" placeholder="Lead Time (e.g. 3 working days)">
+      <input type="text" id="addDays" placeholder="Days (e.g. Monday|Wednesday|Friday)">
+    </div>
+    <button id="addRowBtn">Add row</button>
+    <div class="help-text" style="margin-top:4px;">
+      Note: Prefixes are stored without spaces and in uppercase (e.g. <code>M34</code>, <code>SW1A</code>).
+    </div>
+  </div>
+
+  <script>
+    // ------------------------------------------------------------
+    // Config / Globals
+    // ------------------------------------------------------------
+    const CSV_COLUMNS = ["prefix", "route", "channel", "serviceType", "leadTime", "days"];
+
+    let allRows = [];      // full dataset [{prefix, route, ...}, ...]
+    let filteredIndices = []; // indices into allRows currently shown
+
+    const statusEl = document.getElementById("status");
+    const tbody = document.getElementById("routesTableBody");
+
+    // ------------------------------------------------------------
+    // CSV helpers
+    // ------------------------------------------------------------
+    function parseCsv(text) {
+      const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+      if (!lines.length) return [];
+
+      const headers = lines[0].split(",").map(h => h.trim());
+      const dataLines = lines.slice(1);
+      const rows = [];
+
+      dataLines.forEach(line => {
+        const cols = line.split(",");
+        const row = {};
+        headers.forEach((h, i) => {
+          row[h] = (cols[i] || "").trim();
+        });
+        // Ensure all expected columns exist
+        CSV_COLUMNS.forEach(col => {
+          if (row[col] === undefined) row[col] = "";
+        });
+        rows.push(row);
+      });
+
+      return rows;
+    }
+
+    function toCsv(rows) {
+      const lines = [];
+      lines.push(CSV_COLUMNS.join(","));
+
+      rows.forEach(row => {
+        const vals = CSV_COLUMNS.map(col => {
+          let v = row[col] != null ? String(row[col]) : "";
+          // basic CSV escaping: wrap in quotes if contains comma, quote or newline
+          if (/[",\n]/.test(v)) {
+            v = '"' + v.replace(/"/g, '""') + '"';
+          }
+          return v;
+        });
+        lines.push(vals.join(","));
+      });
+
+      return lines.join("\r\n");
+    }
+
+    // ------------------------------------------------------------
+    // Loading routes.csv
+    // ------------------------------------------------------------
+    function loadRoutes() {
+      statusEl.textContent = "Loading routes.csv …";
+      statusEl.classList.remove("status-error");
+
+      const url = "routes.csv?cb=" + Date.now(); // cache-bust
+
+      fetch(url)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error("HTTP " + response.status);
+          }
+          return response.text();
+        })
+        .then(text => {
+          allRows = parseCsv(text);
+          applyFilters(); // initial render with no filters
+          statusEl.textContent = `Loaded ${allRows.length} rows from routes.csv.`;
+        })
+        .catch(err => {
+          console.error("Error loading routes.csv:", err);
+          statusEl.textContent = "Failed to load routes.csv. Check that it exists in the same repo.";
+          statusEl.classList.add("status-error");
+        });
+    }
+
+    // ------------------------------------------------------------
+    // Filtering
+    // ------------------------------------------------------------
+    function applyFilters() {
+      const prefixFilterRaw = document.getElementById("filterPrefix").value.trim();
+      const routeFilterRaw = document.getElementById("filterRoute").value.trim();
+
+      const prefixFilter = prefixFilterRaw.toUpperCase().replace(/\s+/g, "");
+      const routeFilter = routeFilterRaw.toLowerCase();
+
+      filteredIndices = [];
+
+      allRows.forEach((row, index) => {
+        let ok = true;
+
+        if (prefixFilter) {
+          const rowPrefix = (row.prefix || "").toUpperCase().replace(/\s+/g, "");
+          if (!rowPrefix.startsWith(prefixFilter)) ok = false;
+        }
+
+        if (ok && routeFilter) {
+          const rowRoute = (row.route || "").toLowerCase();
+          if (!rowRoute.includes(routeFilter)) ok = false;
+        }
+
+        if (ok) filteredIndices.push(index);
+      });
+
+      renderTable();
+    }
+
+    function clearFilters() {
+      document.getElementById("filterPrefix").value = "";
+      document.getElementById("filterRoute").value = "";
+      filteredIndices = allRows.map((_, i) => i);
+      renderTable();
+    }
+
+    // ------------------------------------------------------------
+    // Table rendering
+    // ------------------------------------------------------------
+    function renderTable() {
+      if (!filteredIndices.length && allRows.length) {
+        // no matches for filter
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align:center; font-size:12px; padding:8px;">
+              No rows match the current filters.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      if (!allRows.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align:center; font-size:12px; padding:8px;">
+              No data loaded.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      const rowsHtml = filteredIndices.map(idx => {
+        const r = allRows[idx];
+        return `
+          <tr data-index="${idx}">
+            <td class="checkbox-cell">
+              <input type="checkbox" class="row-select">
+            </td>
+            <td><input type="text" data-field="prefix" class="small-input" value="${escapeHtml(r.prefix || "")}"></td>
+            <td><input type="text" data-field="route" value="${escapeHtml(r.route || "")}"></td>
+            <td><input type="text" data-field="channel" value="${escapeHtml(r.channel || "")}"></td>
+            <td><input type="text" data-field="serviceType" value="${escapeHtml(r.serviceType || "")}"></td>
+            <td><input type="text" data-field="leadTime" class="small-input" value="${escapeHtml(r.leadTime || "")}"></td>
+            <td><input type="text" data-field="days" value="${escapeHtml(r.days || "")}"></td>
+          </tr>
+        `;
+      }).join("");
+
+      tbody.innerHTML = rowsHtml;
+      document.getElementById("selectAllRows").checked = false;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    // ------------------------------------------------------------
+    // Editing in table
+    // ------------------------------------------------------------
+    tbody.addEventListener("change", function (e) {
+      const input = e.target;
+      if (input.tagName !== "INPUT" || !input.dataset.field) return;
+
+      const tr = input.closest("tr");
+      if (!tr) return;
+
+      const idx = parseInt(tr.getAttribute("data-index"), 10);
+      const field = input.dataset.field;
+      let value = input.value.trim();
+
+      if (field === "prefix") {
+        value = value.toUpperCase().replace(/\s+/g, "");
+      }
+
+      if (allRows[idx]) {
+        allRows[idx][field] = value;
+      }
+    });
+
+    // Select all checkbox
+    document.getElementById("selectAllRows").addEventListener("change", function () {
+      const checked = this.checked;
+      tbody.querySelectorAll(".row-select").forEach(cb => {
+        cb.checked = checked;
+      });
+    });
+
+    // ------------------------------------------------------------
+    // Add row
+    // ------------------------------------------------------------
+    document.getElementById("addRowBtn").addEventListener("click", function () {
+      const prefixInput = document.getElementById("addPrefix");
+      const routeInput = document.getElementById("addRoute");
+      const channelInput = document.getElementById("addChannel");
+      const serviceInput = document.getElementById("addServiceType");
+      const leadInput = document.getElementById("addLeadTime");
+      const daysInput = document.getElementById("addDays");
+
+      let prefix = prefixInput.value.trim().toUpperCase().replace(/\s+/g, "");
+      const route = routeInput.value.trim();
+      const channel = channelInput.value.trim();
+      const serviceType = serviceInput.value.trim();
+      const leadTime = leadInput.value.trim();
+      const days = daysInput.value.trim();
+
+      if (!prefix || !route || !channel) {
+        alert("Prefix, Route and Channel are required to add a row.");
+        return;
+      }
+
+      allRows.push({
+        prefix,
+        route,
+        channel,
+        serviceType,
+        leadTime,
+        days
+      });
+
+      // Clear add inputs
+      prefixInput.value = "";
+      routeInput.value = "";
+      channelInput.value = "";
+      serviceInput.value = "";
+      leadInput.value = "";
+      daysInput.value = "";
+
+      // Reapply current filters
+      applyFilters();
+      statusEl.textContent = `Row added. Total rows: ${allRows.length}.`;
+      statusEl.classList.remove("status-error");
+    });
+
+    // ------------------------------------------------------------
+    // Delete selected rows
+    // ------------------------------------------------------------
+    document.getElementById("deleteSelectedBtn").addEventListener("click", function () {
+      const checkboxes = tbody.querySelectorAll(".row-select:checked");
+      if (!checkboxes.length) {
+        alert("No rows selected to delete.");
+        return;
+      }
+
+      if (!confirm(`Delete ${checkboxes.length} selected row(s)? This cannot be undone here.`)) {
+        return;
+      }
+
+      const indicesToDelete = new Set();
+      checkboxes.forEach(cb => {
+        const tr = cb.closest("tr");
+        if (!tr) return;
+        const idx = parseInt(tr.getAttribute("data-index"), 10);
+        indicesToDelete.add(idx);
+      });
+
+      // Filter allRows to remove those indices
+      allRows = allRows.filter((row, index) => !indicesToDelete.has(index));
+
+      // Rebuild filteredIndices after deletion
+      filteredIndices = allRows.map((_, i) => i);
+      applyFilters(); // reapply filters based on current inputs
+
+      statusEl.textContent = `Deleted ${indicesToDelete.size} row(s). Total rows now: ${allRows.length}.`;
+      statusEl.classList.remove("status-error");
+    });
+
+    // ------------------------------------------------------------
+    // Download updated CSV
+    // ------------------------------------------------------------
+    document.getElementById("downloadCsvBtn").addEventListener("click", function () {
+      if (!allRows.length) {
+        alert("No data to download.");
+        return;
+      }
+
+      const csv = toCsv(allRows);
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "routes.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    // ------------------------------------------------------------
+    // Filter buttons
+    // ------------------------------------------------------------
+    document.getElementById("applyFiltersBtn").addEventListener("click", applyFilters);
+    document.getElementById("clearFiltersBtn").addEventListener("click", clearFilters);
+
+    // Allow Enter in filter fields to apply filters
+    document.getElementById("filterPrefix").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyFilters();
+      }
+    });
+    document.getElementById("filterRoute").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyFilters();
+      }
+    });
+
+    // ------------------------------------------------------------
+    // Initial load
+    // ------------------------------------------------------------
+    loadRoutes();
+  </script>
+</body>
+</html>
