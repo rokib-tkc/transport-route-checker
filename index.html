@@ -209,7 +209,7 @@
     let rulesLoaded = false;
 
     function parseRulesCsv(text) {
-      const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+      const lines = text.split(/\\r?\\n/).filter(line => line.trim() !== "");
       if (lines.length === 0) return {};
 
       const headers = lines[0].split(",").map(h => h.trim());
@@ -260,11 +260,68 @@
     }
 
     // ============================================================
+    // BANK HOLIDAYS (LOADED FROM bank_holidays.csv)
+    // ============================================================
+
+    let bankHolidaySet = new Set();   // ISO date strings: "YYYY-MM-DD"
+    let bankHolidaysLoaded = false;   // optional diagnostics
+
+    function loadBankHolidays() {
+      return fetch("bank_holidays.csv?cb=" + Date.now())
+        .then(r => {
+          if (!r.ok) throw new Error("Failed to load bank_holidays.csv");
+          return r.text();
+        })
+        .then(text => {
+          const lines = text.split(/\\r?\\n/).map(l => l.trim()).filter(Boolean);
+          if (lines.length <= 1) {
+            bankHolidaySet = new Set();
+            bankHolidaysLoaded = true;
+            return;
+          }
+
+          // Expect header: date,division,title
+          const headers = lines[0].split(",").map(h => h.trim());
+          const dateIdx = headers.indexOf("date");
+          const divisionIdx = headers.indexOf("division");
+
+          const set = new Set();
+
+          for (const line of lines.slice(1)) {
+            const cols = line.split(",");
+            const d = (cols[dateIdx] || "").trim();
+            const div = (cols[divisionIdx] || "").trim();
+            if (!d) continue;
+
+            // Use England & Wales holidays as your business working-day calendar
+            if (!div || div === "england-and-wales") {
+              set.add(d);
+            }
+          }
+
+          bankHolidaySet = set;
+          bankHolidaysLoaded = true;
+        })
+        .catch(err => {
+          console.warn("Bank holidays not loaded (continuing without them):", err);
+          bankHolidaySet = new Set();
+          bankHolidaysLoaded = false;
+        });
+    }
+
+    function toISODateKey(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+      const d = String(dateObj.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+
+    // ============================================================
     // CSV PARSING FOR ROUTES
     // ============================================================
 
     function parseRoutesCsv(text) {
-      const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
+      const lines = text.split(/\\r?\\n/).filter(line => line.trim() !== "");
       if (lines.length === 0) return [];
 
       const headers = lines[0].split(",").map(h => h.trim());
@@ -283,7 +340,7 @@
           .filter(Boolean);
 
         return {
-          prefix: (row.prefix || "").toUpperCase().replace(/\s+/g, ""),
+          prefix: (row.prefix || "").toUpperCase().replace(/\\s+/g, ""),
           route: row.route || "",
           channel: row.channel || "",
           serviceType: row.serviceType || "",
@@ -296,12 +353,12 @@
     }
 
     // ============================================================
-    // NEXT DELIVERY CALCULATION (NEW)
+    // NEXT DELIVERY CALCULATION
     // ============================================================
 
     function parseLeadTimeWorkingDays(leadTimeText) {
       const t = String(leadTimeText || "").toLowerCase();
-      const m = t.match(/(\d+)/);
+      const m = t.match(/(\\d+)/);
       if (m) return parseInt(m[1], 10);
 
       if (t.includes("next day")) return 1;
@@ -311,8 +368,13 @@
     }
 
     function isWorkingDay(dateObj) {
-      const d = dateObj.getDay(); // 0 Sun ... 6 Sat
-      return d >= 1 && d <= 5;
+      const day = dateObj.getDay(); // 0 Sun ... 6 Sat
+      if (day === 0 || day === 6) return false;
+
+      const iso = toISODateKey(dateObj);
+      if (bankHolidaySet.has(iso)) return false;
+
+      return true;
     }
 
     function startOfDay(dateObj) {
@@ -344,8 +406,8 @@
 
     function formatDayDate(dateObj) {
       const day = weekdayName(dateObj);
-      const date = dateObj.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
-      return `${day} ${date}`;
+      const dateStr = dateObj.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      return `${day} ${dateStr}`;
     }
 
     function findNextDeliveryDate(allowedDays, leadTimeText) {
@@ -360,7 +422,7 @@
       // start = today (before 2pm) or next working day (after 2pm)
       let start = startOfDay(now);
 
-      // if weekend, shift to next working day
+      // if weekend or bank holiday, shift to next working day
       if (!isWorkingDay(start)) start = nextWorkingDay(start);
 
       if (afterCutoff) {
@@ -370,9 +432,8 @@
       const leadDays = parseLeadTimeWorkingDays(leadTimeText);
       const earliest = (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
 
-      // find next allowed weekday on/after earliest
       let d = startOfDay(earliest);
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 90; i++) { // give a bit more room around holiday periods
         const dayLower = weekdayName(d).toLowerCase();
         if (allowed.has(dayLower) && d >= earliest) return d;
         d.setDate(d.getDate() + 1);
@@ -386,7 +447,7 @@
     // ============================================================
 
     function normaliseInputPostcode(raw) {
-      return raw ? raw.toUpperCase().replace(/\s+/g, "") : "";
+      return raw ? raw.toUpperCase().replace(/\\s+/g, "") : "";
     }
 
     function findBestMatchingPrefix(routingData, cleaned) {
@@ -584,8 +645,9 @@
       }
     });
 
-    // Load channel rules once on page load
+    // Load supporting CSVs once on page load
     loadChannelRules();
+    loadBankHolidays();
   </script>
 </body>
 </html>
