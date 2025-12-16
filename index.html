@@ -205,8 +205,8 @@
     // CHANNEL RULES (LOADED FROM channel_rules.csv)
     // ============================================================
 
-    let channelRules = {};     // channel -> HTML content
-    let rulesLoaded = false;   // for diagnostics if needed
+    let channelRules = {};
+    let rulesLoaded = false;
 
     function parseRulesCsv(text) {
       const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
@@ -243,11 +243,9 @@
     }
 
     function loadChannelRules() {
-      fetch("channel_rules.csv")
+      fetch("channel_rules.csv?cb=" + Date.now())
         .then(response => {
-          if (!response.ok) {
-            throw new Error("Failed to load channel_rules.csv");
-          }
+          if (!response.ok) throw new Error("Failed to load channel_rules.csv");
           return response.text();
         })
         .then(text => {
@@ -257,7 +255,7 @@
         .catch(err => {
           console.error("Error loading channel_rules.csv:", err);
           rulesLoaded = false;
-          channelRules = {}; // fall back to "No rules defined" text
+          channelRules = {};
         });
     }
 
@@ -295,6 +293,92 @@
       });
 
       return result;
+    }
+
+    // ============================================================
+    // NEXT DELIVERY CALCULATION (NEW)
+    // ============================================================
+
+    function parseLeadTimeWorkingDays(leadTimeText) {
+      const t = String(leadTimeText || "").toLowerCase();
+      const m = t.match(/(\d+)/);
+      if (m) return parseInt(m[1], 10);
+
+      if (t.includes("next day")) return 1;
+      if (t.includes("same day")) return 0;
+
+      return 0;
+    }
+
+    function isWorkingDay(dateObj) {
+      const d = dateObj.getDay(); // 0 Sun ... 6 Sat
+      return d >= 1 && d <= 5;
+    }
+
+    function startOfDay(dateObj) {
+      return new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+    }
+
+    function nextWorkingDay(dateObj) {
+      let d = startOfDay(dateObj);
+      do {
+        d.setDate(d.getDate() + 1);
+      } while (!isWorkingDay(d));
+      return d;
+    }
+
+    function addWorkingDays(dateObj, n) {
+      let d = startOfDay(dateObj);
+      let remaining = n;
+
+      while (remaining > 0) {
+        d.setDate(d.getDate() + 1);
+        if (isWorkingDay(d)) remaining--;
+      }
+      return d;
+    }
+
+    function weekdayName(dateObj) {
+      return dateObj.toLocaleDateString("en-GB", { weekday: "long" });
+    }
+
+    function formatDayDate(dateObj) {
+      const day = weekdayName(dateObj);
+      const date = dateObj.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      return `${day} ${date}`;
+    }
+
+    function findNextDeliveryDate(allowedDays, leadTimeText) {
+      if (!Array.isArray(allowedDays) || allowedDays.length === 0) return null;
+
+      const allowed = new Set(allowedDays.map(d => String(d).trim().toLowerCase()));
+
+      const now = new Date();
+      const cutoffHour = 14; // 2pm
+      const afterCutoff = (now.getHours() > cutoffHour) || (now.getHours() === cutoffHour && now.getMinutes() > 0);
+
+      // start = today (before 2pm) or next working day (after 2pm)
+      let start = startOfDay(now);
+
+      // if weekend, shift to next working day
+      if (!isWorkingDay(start)) start = nextWorkingDay(start);
+
+      if (afterCutoff) {
+        start = nextWorkingDay(start);
+      }
+
+      const leadDays = parseLeadTimeWorkingDays(leadTimeText);
+      const earliest = (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
+
+      // find next allowed weekday on/after earliest
+      let d = startOfDay(earliest);
+      for (let i = 0; i < 60; i++) {
+        const dayLower = weekdayName(d).toLowerCase();
+        if (allowed.has(dayLower) && d >= earliest) return d;
+        d.setDate(d.getDate() + 1);
+      }
+
+      return null;
     }
 
     // ============================================================
@@ -360,6 +444,9 @@
           [...new Set(rowsForChannel.flatMap(r => r.days))]
         );
 
+        const nextDate = findNextDeliveryDate(allDays, leadTime);
+        const nextDeliveryText = nextDate ? formatDayDate(nextDate) : "";
+
         html += `
           <div class="channel-block">
             <div class="channel-header">
@@ -370,9 +457,10 @@
             </div>
             <table>
               <colgroup>
-                <col style="width: 25%">
-                <col style="width: 35%">
                 <col style="width: 20%">
+                <col style="width: 30%">
+                <col style="width: 18%">
+                <col style="width: 12%">
                 <col style="width: 20%">
               </colgroup>
               <thead>
@@ -381,6 +469,7 @@
                   <th>Delivery Days</th>
                   <th>Delivery Type</th>
                   <th>Lead Time</th>
+                  <th>Next Delivery</th>
                 </tr>
               </thead>
               <tbody>
@@ -389,6 +478,7 @@
                   <td>${allDays.join(", ")}</td>
                   <td>${serviceType}</td>
                   <td class="lead-time">${leadTime}</td>
+                  <td class="lead-time">${nextDeliveryText}</td>
                 </tr>
               </tbody>
             </table>
@@ -457,7 +547,6 @@
 
       const cleaned = normaliseInputPostcode(input);
 
-      // cache-busting query param to avoid stale CSV
       const url = "routes.csv?cb=" + Date.now();
 
       fetch(url)
@@ -500,6 +589,3 @@
   </script>
 </body>
 </html>
-
-
-
