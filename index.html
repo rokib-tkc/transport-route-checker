@@ -5,23 +5,11 @@
   <title>Transport Route Checker</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    * {
-      box-sizing: border-box;
-      font-family: Arial, sans-serif;
-    }
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
 
-    body {
-      margin: 0;
-      padding: 20px;
-      background: #f5f5f5;
-      color: #222;
-    }
+    body { margin: 0; padding: 20px; background: #f5f5f5; color: #222; }
 
-    h1 {
-      margin-top: 0;
-      font-size: 24px;
-      text-align: center;
-    }
+    h1 { margin-top: 0; font-size: 24px; text-align: center; }
 
     .container {
       max-width: 1000px;
@@ -40,9 +28,7 @@
       margin-bottom: 10px;
     }
 
-    .search-section label {
-      font-weight: bold;
-    }
+    .search-section label { font-weight: bold; }
 
     .search-input-wrapper {
       flex: 1 1 200px;
@@ -67,16 +53,9 @@
       background: #0078d4;
       color: #fff;
     }
+    button:hover { background: #005ea3; }
 
-    button:hover {
-      background: #005ea3;
-    }
-
-    .results-header {
-      margin-top: 10px;
-      font-size: 14px;
-      font-weight: bold;
-    }
+    .results-header { margin-top: 10px; font-size: 14px; font-weight: bold; }
 
     .no-results {
       margin-top: 10px;
@@ -104,10 +83,7 @@
       margin-bottom: 8px;
     }
 
-    .channel-title {
-      font-size: 16px;
-      font-weight: bold;
-    }
+    .channel-title { font-size: 16px; font-weight: bold; }
 
     .channel-rules-trigger {
       font-size: 12px;
@@ -132,14 +108,9 @@
       overflow-wrap: break-word;
     }
 
-    th {
-      background: #f0f0f0;
-      font-weight: bold;
-    }
+    th { background: #f0f0f0; font-weight: bold; }
 
-    .lead-time {
-      white-space: nowrap;
-    }
+    .lead-time { white-space: nowrap; }
 
     #channelTooltip {
       position: fixed;
@@ -156,19 +127,13 @@
     }
 
     @media (max-width: 600px) {
-      .search-section {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-      .search-input-wrapper {
-        width: 100%;
-      }
-      button {
-        width: 100%;
-      }
+      .search-section { flex-direction: column; align-items: flex-start; }
+      .search-input-wrapper { width: 100%; }
+      button { width: 100%; }
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <h1>Transport Route Checker</h1>
@@ -197,64 +162,79 @@
     </div>
   </div>
 
-  <!-- Shared tooltip element -->
   <div id="channelTooltip"></div>
 
   <script>
+    // ============================================================
+    // DELIMITER-DETECTING PARSER (comma CSV or tab TSV)
+    // ============================================================
+
+    function stripBom(s) {
+      return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+    }
+
+    function detectDelimiter(headerLine) {
+      // prefer tab if present (your screenshot showed tabs)
+      if (headerLine.includes("\t")) return "\t";
+      return ",";
+    }
+
+    function splitLine(line, delim) {
+      // Simple split for your files (no embedded commas/tabs expected).
+      // If you ever need quoted CSV support, tell me and I’ll upgrade this.
+      return line.split(delim).map(x => x.trim());
+    }
+
+    function parseDelimited(text) {
+      const cleanedText = stripBom(String(text || ""));
+      const lines = cleanedText.split(/\r?\n/).filter(l => l.trim() !== "");
+      if (!lines.length) return { headers: [], rows: [] };
+
+      const delim = detectDelimiter(lines[0]);
+      const headers = splitLine(lines[0], delim);
+
+      const rows = [];
+      for (const line of lines.slice(1)) {
+        const cols = splitLine(line, delim);
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = (cols[i] || ""));
+        rows.push(obj);
+      }
+      return { headers, rows };
+    }
+
     // ============================================================
     // CHANNEL RULES (LOADED FROM channel_rules.csv)
     // ============================================================
 
     let channelRules = {};
-    let rulesLoaded = false;
-
-    function parseRulesCsv(text) {
-      const lines = text.split(/\\r?\\n/).filter(line => line.trim() !== "");
-      if (lines.length === 0) return {};
-
-      const headers = lines[0].split(",").map(h => h.trim());
-      const dataLines = lines.slice(1);
-      const channelIndex = headers.indexOf("channel");
-      const rulesIndex = headers.indexOf("rules");
-
-      const result = {};
-
-      dataLines.forEach(line => {
-        const cols = line.split(",");
-        const channel = (cols[channelIndex] || "").trim();
-        const rulesCell = (cols[rulesIndex] || "").trim();
-
-        if (!channel) return;
-
-        const parts = rulesCell
-          .split("|")
-          .map(p => p.trim())
-          .filter(Boolean);
-
-        let html = `<strong>${channel} rules</strong>`;
-        if (parts.length) {
-          html += "<br>" + parts.map(p => "- " + p).join("<br>");
-        }
-
-        result[channel] = html;
-      });
-
-      return result;
-    }
 
     function loadChannelRules() {
       fetch("channel_rules.csv?cb=" + Date.now())
-        .then(response => {
-          if (!response.ok) throw new Error("Failed to load channel_rules.csv");
-          return response.text();
+        .then(r => {
+          if (!r.ok) throw new Error("Failed to load channel_rules.csv");
+          return r.text();
         })
         .then(text => {
-          channelRules = parseRulesCsv(text);
-          rulesLoaded = true;
+          const parsed = parseDelimited(text);
+          const rows = parsed.rows;
+
+          const out = {};
+          rows.forEach(row => {
+            const channel = (row.channel || "").trim();
+            const rulesCell = (row.rules || "").trim();
+            if (!channel) return;
+
+            const parts = rulesCell.split("|").map(p => p.trim()).filter(Boolean);
+            let html = `<strong>${channel} rules</strong>`;
+            if (parts.length) html += "<br>" + parts.map(p => "- " + p).join("<br>");
+            out[channel] = html;
+          });
+
+          channelRules = out;
         })
         .catch(err => {
           console.error("Error loading channel_rules.csv:", err);
-          rulesLoaded = false;
           channelRules = {};
         });
     }
@@ -263,51 +243,7 @@
     // BANK HOLIDAYS (LOADED FROM bank_holidays.csv)
     // ============================================================
 
-    let bankHolidaySet = new Set();   // ISO date strings: "YYYY-MM-DD"
-    let bankHolidaysLoaded = false;   // optional diagnostics
-
-    function loadBankHolidays() {
-      return fetch("bank_holidays.csv?cb=" + Date.now())
-        .then(r => {
-          if (!r.ok) throw new Error("Failed to load bank_holidays.csv");
-          return r.text();
-        })
-        .then(text => {
-          const lines = text.split(/\\r?\\n/).map(l => l.trim()).filter(Boolean);
-          if (lines.length <= 1) {
-            bankHolidaySet = new Set();
-            bankHolidaysLoaded = true;
-            return;
-          }
-
-          // Expect header: date,division,title
-          const headers = lines[0].split(",").map(h => h.trim());
-          const dateIdx = headers.indexOf("date");
-          const divisionIdx = headers.indexOf("division");
-
-          const set = new Set();
-
-          for (const line of lines.slice(1)) {
-            const cols = line.split(",");
-            const d = (cols[dateIdx] || "").trim();
-            const div = (cols[divisionIdx] || "").trim();
-            if (!d) continue;
-
-            // Use England & Wales holidays as your business working-day calendar
-            if (!div || div === "england-and-wales") {
-              set.add(d);
-            }
-          }
-
-          bankHolidaySet = set;
-          bankHolidaysLoaded = true;
-        })
-        .catch(err => {
-          console.warn("Bank holidays not loaded (continuing without them):", err);
-          bankHolidaySet = new Set();
-          bankHolidaysLoaded = false;
-        });
-    }
+    let bankHolidaySet = new Set(); // ISO YYYY-MM-DD
 
     function toISODateKey(dateObj) {
       const y = dateObj.getFullYear();
@@ -316,64 +252,79 @@
       return `${y}-${m}-${d}`;
     }
 
-    // ============================================================
-    // CSV PARSING FOR ROUTES
-    // ============================================================
+    function loadBankHolidays() {
+      return fetch("bank_holidays.csv?cb=" + Date.now())
+        .then(r => {
+          if (!r.ok) throw new Error("Failed to load bank_holidays.csv");
+          return r.text();
+        })
+        .then(text => {
+          const parsed = parseDelimited(text);
+          const rows = parsed.rows;
 
-    function parseRoutesCsv(text) {
-      const lines = text.split(/\\r?\\n/).filter(line => line.trim() !== "");
-      if (lines.length === 0) return [];
+          const set = new Set();
+          rows.forEach(row => {
+            const d = (row.date || "").trim();           // YYYY-MM-DD
+            const div = (row.division || "").trim();     // england-and-wales
+            if (!d) return;
+            if (!div || div === "england-and-wales") set.add(d);
+          });
 
-      const headers = lines[0].split(",").map(h => h.trim());
-      const dataLines = lines.slice(1);
-
-      const result = dataLines.map(line => {
-        const cols = line.split(",");
-        const row = {};
-        headers.forEach((h, i) => {
-          row[h] = (cols[i] || "").trim();
+          bankHolidaySet = set;
+        })
+        .catch(err => {
+          console.warn("Bank holidays not loaded (continuing without them):", err);
+          bankHolidaySet = new Set();
         });
+    }
 
-        const daysArray = (row.days || "")
+    // ============================================================
+    // ROUTES PARSING (routes.csv can be comma or tab separated)
+    // ============================================================
+
+    function normalisePrefix(v) {
+      return String(v || "").toUpperCase().replace(/\s+/g, "").trim();
+    }
+
+    function parseRoutes(text) {
+      const parsed = parseDelimited(text);
+      const rows = parsed.rows;
+
+      return rows.map(row => {
+        const daysArray = String(row.days || "")
           .split("|")
           .map(d => d.trim())
           .filter(Boolean);
 
         return {
-          prefix: (row.prefix || "").toUpperCase().replace(/\\s+/g, ""),
-          route: row.route || "",
-          channel: row.channel || "",
-          serviceType: row.serviceType || "",
-          leadTime: row.leadTime || "",
+          prefix: normalisePrefix(row.prefix),
+          route: String(row.route || "").trim(),
+          channel: String(row.channel || "").trim(),
+          serviceType: String(row.serviceType || "").trim(),
+          leadTime: String(row.leadTime || "").trim(),
           days: daysArray
         };
-      });
-
-      return result;
+      }).filter(r => r.prefix && r.channel); // drop junk rows
     }
 
     // ============================================================
-    // NEXT DELIVERY CALCULATION
+    // NEXT DELIVERY CALCULATION (2pm cutoff + working days + bank holidays)
     // ============================================================
 
     function parseLeadTimeWorkingDays(leadTimeText) {
       const t = String(leadTimeText || "").toLowerCase();
-      const m = t.match(/(\\d+)/);
+      const m = t.match(/(\d+)/);
       if (m) return parseInt(m[1], 10);
-
       if (t.includes("next day")) return 1;
       if (t.includes("same day")) return 0;
-
       return 0;
     }
 
     function isWorkingDay(dateObj) {
       const day = dateObj.getDay(); // 0 Sun ... 6 Sat
       if (day === 0 || day === 6) return false;
-
       const iso = toISODateKey(dateObj);
       if (bankHolidaySet.has(iso)) return false;
-
       return true;
     }
 
@@ -383,16 +334,13 @@
 
     function nextWorkingDay(dateObj) {
       let d = startOfDay(dateObj);
-      do {
-        d.setDate(d.getDate() + 1);
-      } while (!isWorkingDay(d));
+      do { d.setDate(d.getDate() + 1); } while (!isWorkingDay(d));
       return d;
     }
 
     function addWorkingDays(dateObj, n) {
       let d = startOfDay(dateObj);
       let remaining = n;
-
       while (remaining > 0) {
         d.setDate(d.getDate() + 1);
         if (isWorkingDay(d)) remaining--;
@@ -419,26 +367,19 @@
       const cutoffHour = 14; // 2pm
       const afterCutoff = (now.getHours() > cutoffHour) || (now.getHours() === cutoffHour && now.getMinutes() > 0);
 
-      // start = today (before 2pm) or next working day (after 2pm)
       let start = startOfDay(now);
-
-      // if weekend or bank holiday, shift to next working day
       if (!isWorkingDay(start)) start = nextWorkingDay(start);
-
-      if (afterCutoff) {
-        start = nextWorkingDay(start);
-      }
+      if (afterCutoff) start = nextWorkingDay(start);
 
       const leadDays = parseLeadTimeWorkingDays(leadTimeText);
       const earliest = (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
 
       let d = startOfDay(earliest);
-      for (let i = 0; i < 90; i++) { // give a bit more room around holiday periods
+      for (let i = 0; i < 90; i++) {
         const dayLower = weekdayName(d).toLowerCase();
         if (allowed.has(dayLower) && d >= earliest) return d;
         d.setDate(d.getDate() + 1);
       }
-
       return null;
     }
 
@@ -447,7 +388,7 @@
     // ============================================================
 
     function normaliseInputPostcode(raw) {
-      return raw ? raw.toUpperCase().replace(/\\s+/g, "") : "";
+      return raw ? raw.toUpperCase().replace(/\s+/g, "") : "";
     }
 
     function findBestMatchingPrefix(routingData, cleaned) {
@@ -501,9 +442,7 @@
         const serviceType = rowsForChannel[0].serviceType;
         const leadTime = rowsForChannel[0].leadTime;
 
-        const allDays = sortDays(
-          [...new Set(rowsForChannel.flatMap(r => r.days))]
-        );
+        const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
 
         const nextDate = findNextDeliveryDate(allDays, leadTime);
         const nextDeliveryText = nextDate ? formatDayDate(nextDate) : "";
@@ -588,10 +527,7 @@
         });
 
         trigger.addEventListener("mousemove", positionTooltip);
-
-        trigger.addEventListener("mouseleave", () => {
-          tooltip.style.display = "none";
-        });
+        trigger.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
       });
     }
 
@@ -607,18 +543,15 @@
       }
 
       const cleaned = normaliseInputPostcode(input);
-
       const url = "routes.csv?cb=" + Date.now();
 
       fetch(url)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error("Failed to load routes.csv");
-          }
-          return response.text();
+        .then(r => {
+          if (!r.ok) throw new Error("Failed to load routes.csv");
+          return r.text();
         })
         .then(text => {
-          const routingData = parseRoutesCsv(text);
+          const routingData = parseRoutes(text);
           const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
 
           if (!bestPrefix) {
@@ -639,10 +572,7 @@
 
     document.getElementById("searchButton").onclick = performSearch;
     document.getElementById("postcodeInput").addEventListener("keydown", e => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        performSearch();
-      }
+      if (e.key === "Enter") { e.preventDefault(); performSearch(); }
     });
 
     // Load supporting CSVs once on page load
