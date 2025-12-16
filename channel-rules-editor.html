@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Channel Rules Editor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { margin: 0; padding: 20px; background: #f5f5f5; color: #222; }
+
+    h1 { margin: 0; font-size: 24px; text-align: center; }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: #555;
+      margin-top: 6px;
+      margin-bottom: 15px;
+    }
+
+    .status-bar {
+      font-size: 13px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      background: #eef6ff;
+      color: #004b8d;
+      border: 1px solid #a8c7ff;
+    }
+    .status-error {
+      background: #ffe5e5;
+      color: #a00;
+      border-color: #dd6666;
+    }
+
+    .section-title {
+      font-weight: bold;
+      margin-top: 15px;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .filters, .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    label { font-size: 13px; }
+    input[type="text"] {
+      padding: 6px 8px;
+      font-size: 13px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      min-width: 220px;
+    }
+
+    button {
+      padding: 6px 12px;
+      font-size: 13px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      background: #0078d4;
+      color: #fff;
+      white-space: nowrap;
+    }
+    button:hover { background: #005ea3; }
+    button.secondary { background: #e0e0e0; color: #333; }
+    button.secondary:hover { background: #c8c8c8; }
+
+    .help-text { font-size: 11px; color: #666; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+    th, td {
+      padding: 4px 6px;
+      border: 1px solid #ddd;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f0f0f0; font-weight: bold; }
+
+    td input[type="text"] {
+      width: 100%;
+      padding: 4px 5px;
+      font-size: 12px;
+      border-radius: 3px;
+      border: 1px solid #ccc;
+    }
+    td textarea {
+      width: 100%;
+      min-height: 72px;
+      resize: vertical;
+      padding: 6px;
+      font-size: 12px;
+      border-radius: 3px;
+      border: 1px solid #ccc;
+      line-height: 1.4;
+    }
+
+    .checkbox-cell { text-align: center; width: 32px; }
+
+    .add-row-grid {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 8px;
+      margin-top: 5px;
+      margin-bottom: 8px;
+    }
+
+    .preview-box {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .preview-title { font-weight: bold; margin-bottom: 6px; }
+    .preview-lines { margin: 0; padding-left: 16px; }
+    .preview-lines li { margin: 2px 0; }
+
+    @media (max-width: 700px) {
+      .filters, .actions { flex-direction: column; align-items: flex-start; }
+      input[type="text"] { width: 100%; min-width: 0; }
+      .add-row-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Channel Rules Editor</h1>
+    <div class="subtitle">
+      Admin tool to edit <code>channel_rules.csv</code> used for hover tooltips.
+      After editing, download the updated CSV and upload/commit it to GitHub.
+    </div>
+
+    <div id="status" class="status-bar">Loading channel_rules.csv …</div>
+
+    <div class="section-title">Filters</div>
+    <div class="filters">
+      <label>
+        Channel contains:
+        <input type="text" id="filterChannel" placeholder="e.g. Component">
+      </label>
+      <button id="applyFiltersBtn">Apply filters</button>
+      <button id="clearFiltersBtn" class="secondary">Clear filters</button>
+      <span class="help-text">Filters only affect what you see/edit; download includes all rows.</span>
+    </div>
+
+    <div class="section-title">Actions</div>
+    <div class="actions">
+      <button id="deleteSelectedBtn" class="secondary">Delete selected rows</button>
+      <button id="downloadCsvBtn">Download updated channel_rules.csv</button>
+    </div>
+
+    <div class="section-title">Rules table</div>
+    <table>
+      <thead>
+        <tr>
+          <th class="checkbox-cell"><input type="checkbox" id="selectAllRows"></th>
+          <th style="width: 25%;">Channel</th>
+          <th>Rules (one per line — exported using |)</th>
+        </tr>
+      </thead>
+      <tbody id="rulesTableBody"></tbody>
+    </table>
+
+    <div class="section-title">Add new channel rules row</div>
+    <div class="add-row-grid">
+      <input type="text" id="addChannel" placeholder="Channel (e.g. Component Channel)">
+      <textarea id="addRules" placeholder="Enter rules, one per line"></textarea>
+    </div>
+    <button id="addRowBtn">Add row</button>
+    <div class="help-text" style="margin-top:4px;">
+      Tip: Write rules as lines. Example:<br>
+      <code>One-person delivery only</code><br>
+      <code>Standard lead times apply</code>
+    </div>
+
+    <div class="section-title">Preview</div>
+    <div class="preview-box" id="previewBox">
+      <div class="preview-title">Hover tooltip preview (select a row)</div>
+      <div id="previewContent" class="help-text">No row selected.</div>
+    </div>
+  </div>
+
+  <script>
+    const CSV_COLUMNS = ["channel", "rules"];
+
+    let allRows = [];          // [{channel, rules}] where rules stored in pipe format internally
+    let filteredIndices = [];  // indices into allRows currently shown
+
+    const statusEl = document.getElementById("status");
+    const tbody = document.getElementById("rulesTableBody");
+    const previewContent = document.getElementById("previewContent");
+
+    // -----------------------------
+    // CSV helpers (simple)
+    // -----------------------------
+    function parseCsv(text) {
+      const lines = text.split(/\r?\n/).filter(l => l.trim() !== "");
+      if (!lines.length) return [];
+
+      const headers = lines[0].split(",").map(h => h.trim());
+      const dataLines = lines.slice(1);
+      const rows = [];
+
+      dataLines.forEach(line => {
+        const cols = line.split(",");
+        const row = {};
+        headers.forEach((h, i) => {
+          row[h] = (cols[i] || "").trim();
+        });
+
+        CSV_COLUMNS.forEach(col => {
+          if (row[col] === undefined) row[col] = "";
+        });
+
+        rows.push({
+          channel: row.channel || "",
+          rules: row.rules || ""  // pipe-separated in file
+        });
+      });
+
+      return rows;
+    }
+
+    function toCsv(rows) {
+      const lines = [];
+      lines.push(CSV_COLUMNS.join(","));
+
+      rows.forEach(row => {
+        const vals = CSV_COLUMNS.map(col => {
+          let v = row[col] != null ? String(row[col]) : "";
+          // Escape if needed
+          if (/[",\n]/.test(v)) {
+            v = '"' + v.replace(/"/g, '""') + '"';
+          }
+          return v;
+        });
+        lines.push(vals.join(","));
+      });
+
+      return lines.join("\r\n");
+    }
+
+    // -----------------------------
+    // UI helpers
+    // -----------------------------
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    }
+
+    function pipeToLines(pipeText) {
+      const parts = String(pipeText || "")
+        .split("|")
+        .map(p => p.trim())
+        .filter(Boolean);
+      return parts.join("\n");
+    }
+
+    function linesToPipe(linesText) {
+      const parts = String(linesText || "")
+        .split(/\r?\n/)
+        .map(p => p.trim())
+        .filter(Boolean);
+      return parts.join("|");
+    }
+
+    function renderPreview(channel, rulesPipe) {
+      const lines = String(rulesPipe || "")
+        .split("|")
+        .map(p => p.trim())
+        .filter(Boolean);
+
+      if (!channel) {
+        previewContent.innerHTML = `<span class="help-text">No row selected.</span>`;
+        return;
+      }
+
+      let html = `<div><strong>${escapeHtml(channel)} rules</strong></div>`;
+      if (lines.length) {
+        html += `<ul class="preview-lines">` + lines.map(l => `<li>${escapeHtml(l)}</li>`).join("") + `</ul>`;
+      } else {
+        html += `<div class="help-text">No rules entered for this channel.</div>`;
+      }
+      previewContent.innerHTML = html;
+    }
+
+    // -----------------------------
+    // Loading
+    // -----------------------------
+    function loadRules() {
+      statusEl.textContent = "Loading channel_rules.csv …";
+      statusEl.classList.remove("status-error");
+
+      const url = "channel_rules.csv?cb=" + Date.now();
+
+      fetch(url)
+        .then(r => {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        })
+        .then(text => {
+          allRows = parseCsv(text);
+          applyFilters();
+          statusEl.textContent = `Loaded ${allRows.length} row(s) from channel_rules.csv.`;
+          renderPreview("", "");
+        })
+        .catch(err => {
+          console.error("Error loading channel_rules.csv:", err);
+          statusEl.textContent = "Failed to load channel_rules.csv. Check it exists in the same repo folder.";
+          statusEl.classList.add("status-error");
+          allRows = [];
+          filteredIndices = [];
+          renderTable();
+          renderPreview("", "");
+        });
+    }
+
+    // -----------------------------
+    // Filtering
+    // -----------------------------
+    function applyFilters() {
+      const raw = document.getElementById("filterChannel").value.trim().toLowerCase();
+      filteredIndices = [];
+
+      allRows.forEach((row, idx) => {
+        if (!raw) {
+          filteredIndices.push(idx);
+          return;
+        }
+        const ch = String(row.channel || "").toLowerCase();
+        if (ch.includes(raw)) filteredIndices.push(idx);
+      });
+
+      renderTable();
+    }
+
+    function clearFilters() {
+      document.getElementById("filterChannel").value = "";
+      filteredIndices = allRows.map((_, i) => i);
+      renderTable();
+    }
+
+    // -----------------------------
+    // Table rendering
+    // -----------------------------
+    function renderTable() {
+      document.getElementById("selectAllRows").checked = false;
+
+      if (!allRows.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="3" style="text-align:center; font-size:12px; padding:8px;">
+              No data loaded.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      if (!filteredIndices.length) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="3" style="text-align:center; font-size:12px; padding:8px;">
+              No rows match the current filter.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filteredIndices.map(idx => {
+        const r = allRows[idx];
+        const rulesLines = pipeToLines(r.rules);
+
+        return `
+          <tr data-index="${idx}">
+            <td class="checkbox-cell"><input type="checkbox" class="row-select"></td>
+            <td><input type="text" data-field="channel" value="${escapeHtml(r.channel || "")}"></td>
+            <td>
+              <textarea data-field="rulesLines">${escapeHtml(rulesLines)}</textarea>
+              <div class="help-text">Saved format uses <code>|</code> between rules.</div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    // -----------------------------
+    // Editing handlers
+    // -----------------------------
+    tbody.addEventListener("input", function (e) {
+      const el = e.target;
+      const tr = el.closest("tr");
+      if (!tr) return;
+
+      const idx = parseInt(tr.getAttribute("data-index"), 10);
+      if (!allRows[idx]) return;
+
+      if (el.tagName === "INPUT" && el.dataset.field === "channel") {
+        allRows[idx].channel = el.value.trim();
+      }
+
+      if (el.tagName === "TEXTAREA" && el.dataset.field === "rulesLines") {
+        allRows[idx].rules = linesToPipe(el.value);
+      }
+    });
+
+    // Preview: click row anywhere to preview
+    tbody.addEventListener("click", function (e) {
+      const tr = e.target.closest("tr");
+      if (!tr) return;
+      const idx = parseInt(tr.getAttribute("data-index"), 10);
+      const row = allRows[idx];
+      renderPreview(row.channel, row.rules);
+    });
+
+    // Select all
+    document.getElementById("selectAllRows").addEventListener("change", function () {
+      const checked = this.checked;
+      tbody.querySelectorAll(".row-select").forEach(cb => cb.checked = checked);
+    });
+
+    // -----------------------------
+    // Add row
+    // -----------------------------
+    document.getElementById("addRowBtn").addEventListener("click", function () {
+      const chEl = document.getElementById("addChannel");
+      const rulesEl = document.getElementById("addRules");
+
+      const channel = chEl.value.trim();
+      const rulesPipe = linesToPipe(rulesEl.value);
+
+      if (!channel) {
+        alert("Channel is required.");
+        return;
+      }
+
+      allRows.push({ channel, rules: rulesPipe });
+
+      chEl.value = "";
+      rulesEl.value = "";
+
+      applyFilters();
+      statusEl.textContent = `Row added. Total rows: ${allRows.length}.`;
+      statusEl.classList.remove("status-error");
+    });
+
+    // -----------------------------
+    // Delete selected
+    // -----------------------------
+    document.getElementById("deleteSelectedBtn").addEventListener("click", function () {
+      const checked = tbody.querySelectorAll(".row-select:checked");
+      if (!checked.length) {
+        alert("No rows selected to delete.");
+        return;
+      }
+
+      if (!confirm(`Delete ${checked.length} selected row(s)?`)) return;
+
+      const idxSet = new Set();
+      checked.forEach(cb => {
+        const tr = cb.closest("tr");
+        if (!tr) return;
+        idxSet.add(parseInt(tr.getAttribute("data-index"), 10));
+      });
+
+      allRows = allRows.filter((_, i) => !idxSet.has(i));
+
+      applyFilters();
+      renderPreview("", "");
+      statusEl.textContent = `Deleted ${idxSet.size} row(s). Total rows now: ${allRows.length}.`;
+      statusEl.classList.remove("status-error");
+    });
+
+    // -----------------------------
+    // Download CSV
+    // -----------------------------
+    document.getElementById("downloadCsvBtn").addEventListener("click", function () {
+      if (!allRows.length) {
+        alert("No data to download.");
+        return;
+      }
+
+      // basic validation: remove fully blank channels
+      const cleaned = allRows
+        .map(r => ({ channel: String(r.channel || "").trim(), rules: String(r.rules || "").trim() }))
+        .filter(r => r.channel.length > 0);
+
+      const csv = toCsv(cleaned);
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "channel_rules.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    // -----------------------------
+    // Filter buttons & enter key
+    // -----------------------------
+    document.getElementById("applyFiltersBtn").addEventListener("click", applyFilters);
+    document.getElementById("clearFiltersBtn").addEventListener("click", clearFilters);
+
+    document.getElementById("filterChannel").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyFilters();
+      }
+    });
+
+    // -----------------------------
+    // Init
+    // -----------------------------
+    loadRules();
+  </script>
+</body>
+</html>
