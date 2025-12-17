@@ -377,7 +377,7 @@
       let d = startOfDay(earliest);
       for (let i = 0; i < 90; i++) {
         const dayLower = weekdayName(d).toLowerCase();
-        if (allowed.has(dayLower) && d >= earliest) return d;
+        if (allowed.has(dayLower) && d >= earliest && isWorkingDay(d)) return d;
         d.setDate(d.getDate() + 1);
       }
       return null;
@@ -581,6 +581,7 @@
   </script>
 </body>
 </html>
+
 
 
 
