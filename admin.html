@@ -109,7 +109,7 @@
       margin: 0 auto;
       border: 1px solid #ccc;
       border-radius: 12px;
-      overflow: hidden; /* keep full view, no horizontal scroll */
+      overflow: visible; /* IMPORTANT: allows sticky table header during page scroll */
     }
 
     table{
@@ -118,24 +118,6 @@
       table-layout: fixed; /* equal widths within available space */
       min-width: 0;
     }
-
-    /* ---------- STICKY HEADER ROW (dates always visible) ---------- */
-thead th{
-  position: sticky;
-  top: 0;
-  z-index: 10;              /* above body cells */
-}
-
-/* Keep the top-left "Route" header above everything */
-th.routeHead{
-  z-index: 25;              /* above sticky header + sticky route column */
-}
-
-/* Keep sticky route cells above normal cells (but below header) */
-td.routeCell{
-  z-index: 6;
-}
-
 
     th, td{
       border: 1px solid var(--border);
@@ -155,6 +137,13 @@ td.routeCell{
       font-size: 12.5px;
     }
 
+    /* ---------- STICKY HEADER ROW (sticks to top of the page) ---------- */
+    thead th{
+      position: sticky;
+      top: 0;       /* sticks under browser UI/address bar */
+      z-index: 20;  /* above body cells */
+    }
+
     /* Route column (sticky) */
     th.routeHead, td.routeCell{
       width: 230px;
@@ -166,13 +155,13 @@ td.routeCell{
       text-align: left;
       position: sticky;
       left: 0;
-      z-index: 2;
-      overflow: visible; /* allow tooltip */
+      z-index: 10;        /* below header cells, above normal body cells */
+      overflow: visible;  /* allow tooltip */
     }
     th.routeHead{
       position: sticky;
       left: 0;
-      z-index: 3;
+      z-index: 30;        /* top-left corner above everything */
     }
 
     .inactive{background: var(--inactive)}
@@ -209,7 +198,7 @@ td.routeCell{
       position: absolute;
       left: 0;
       top: calc(100% + 8px);
-      z-index: 50;
+      z-index: 9999; /* ensure tooltip is on top */
 
       min-width: 280px;
       max-width: 520px;
@@ -248,32 +237,29 @@ td.routeCell{
       color: #333;
     }
 
+    /* ---------- TOOLTIP LAYER FIX (keep tooltip above rows below) ---------- */
+
     /* Give tbody its own stacking context */
-tbody{
-  position: relative;
-  z-index: 1;
-}
+    tbody{
+      position: relative;
+      z-index: 1;
+    }
 
-/* Lift the hovered row above other rows */
-tbody tr:hover{
-  position: relative;
-  z-index: 50;
-}
+    /* Lift the hovered row above other rows */
+    tbody tr:hover{
+      position: relative;
+      z-index: 50;
+    }
 
-/* Lift the sticky route cell above other cells when hovered */
-td.routeCell:hover{
-  z-index: 200;
-}
+    /* Lift the sticky route cell above other cells when hovered */
+    td.routeCell:hover{
+      z-index: 200;
+    }
 
-/* Lift the routeName wrapper above the row */
-.routeName:hover{
-  z-index: 300;
-}
-
-/* Ensure the tooltip itself is on top */
-.routeTooltip{
-  z-index: 9999;
-}
+    /* Lift the routeName wrapper above the row */
+    .routeName:hover{
+      z-index: 300;
+    }
 
     /* ---------- HIDE/SHOW ---------- */
     .hidden{display:none !important;}
@@ -493,8 +479,6 @@ td.routeCell:hover{
 
     // ---------- Prefix grouping helpers (from routes.csv "prefix" column) ----------
     function normaliseDistrictToken(token){
-      // Supports: B1, b01, DE2, DE10, de-10, etc.
-      // Ignores anything that isn't 1–2 letters + 1–2 digits (optionally with a trailing letter)
       const t = String(token || "").trim().toUpperCase();
       const m = t.match(/^([A-Z]{1,2})\s*0*(\d{1,2})([A-Z]?)$/);
       if (!m) return null;
@@ -506,10 +490,7 @@ td.routeCell:hover{
     }
 
     function extractDistrictsFromPrefixCell(cell){
-      // Split on common separators. Also handles "B1-B20" style by extracting B1 and B20.
       const text = String(cell || "").toUpperCase();
-
-      // Find tokens like B1, DE10, etc anywhere in the string
       const matches = text.match(/[A-Z]{1,2}\s*0*\d{1,2}[A-Z]?/g) || [];
       const out = [];
       for (const m of matches){
@@ -520,9 +501,8 @@ td.routeCell:hover{
     }
 
     function groupDistrictsToRanges(districts){
-      // Group only “pure numeric” districts (no suffix). Keep suffix ones as individual tokens.
-      const byAreaNums = new Map();   // area -> Set(nums)
-      const suffixTokens = new Map(); // area -> Set(raw tokens with suffix)
+      const byAreaNums = new Map();
+      const suffixTokens = new Map();
 
       for (const d of districts){
         if (!d) continue;
@@ -540,7 +520,6 @@ td.routeCell:hover{
         .sort((a,b)=>a.localeCompare(b,"en-GB"));
 
       for (const area of areas){
-        // numeric ranges
         const numsSet = byAreaNums.get(area) || new Set();
         const nums = Array.from(numsSet).sort((a,b)=>a-b);
 
@@ -555,7 +534,6 @@ td.routeCell:hover{
           parts.push(start === prev ? `${area}${start}` : `${area}${start}–${area}${prev}`);
         }
 
-        // suffix districts (e.g. W1A) - keep as single tokens
         const sufSet = suffixTokens.get(area);
         if (sufSet && sufSet.size){
           const suf = Array.from(sufSet).sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true}));
@@ -563,14 +541,7 @@ td.routeCell:hover{
         }
       }
 
-      // Clean ranges to show "DE2–DE10" instead of "DE2–DE10" already fine.
-      // But we can shorten duplicated area at the end: "DE2–DE10" is already correct.
-      const cleaned = parts.map(p => {
-        // If it looks like "DE2–DE10" already ok; if "DE2–DE10" w/ area repeated kept.
-        return p.replace(/^([A-Z]{1,2}\d+)–\1([A-Z]{1,2})(\d+)$/, "$1–$2$3");
-      });
-
-      // Combine with "; " separators for neat wrap
+      const cleaned = parts.map(p => p.replace(/^([A-Z]{1,2}\d+)–\1([A-Z]{1,2})(\d+)$/, "$1–$2$3"));
       return cleaned.join("; ");
     }
 
@@ -655,11 +626,8 @@ td.routeCell:hover{
       );
       if (routeIdx === -1) throw new Error("routes.csv must include a 'Route' column");
 
-      // Prefix column for postcode districts (your note: first column is "prefix")
       const prefixIdx = headers.findIndex(h => h === "prefix");
-      if (prefixIdx === -1) {
-        throw new Error("routes.csv must include a 'prefix' column (postcode prefix/district).");
-      }
+      if (prefixIdx === -1) throw new Error("routes.csv must include a 'prefix' column (postcode prefix/district).");
 
       const dayCols = new Map();
       headers.forEach((h,i)=>{
@@ -674,7 +642,7 @@ td.routeCell:hover{
       schedule.clear();
       routePostcodeGroups.clear();
 
-      const routeDistricts = new Map(); // route -> list of district tokens found from prefix column
+      const routeDistricts = new Map();
 
       for (let r=1; r<rows.length; r++){
         const row = rows[r];
@@ -682,11 +650,9 @@ td.routeCell:hover{
         const route = String(row[routeIdx] || "").trim();
         if (!route) continue;
 
-        // Exclusions you requested:
         if (route.toUpperCase().startsWith("3PLCO")) continue;
         if (route.length <= 5) continue;
 
-        // Build schedule
         let days = new Set();
         if (dayCols.size >= 5){
           for (const [w,col] of dayCols.entries()){
@@ -695,23 +661,18 @@ td.routeCell:hover{
         } else if (deliveryDaysIdx !== -1){
           days = parseDeliveryDaysString(row[deliveryDaysIdx]);
         } else {
-          // no day data; skip
           continue;
         }
 
         if (days.size) schedule.set(route, days);
 
-        // Build tooltip groups from prefix column
         const prefixCell = row[prefixIdx];
         if (!routeDistricts.has(route)) routeDistricts.set(route, []);
         routeDistricts.get(route).push(...extractDistrictsFromPrefixCell(prefixCell));
       }
 
-      if (schedule.size === 0){
-        throw new Error("No route schedules inferred from routes.csv (after exclusions).");
-      }
+      if (schedule.size === 0) throw new Error("No route schedules inferred from routes.csv (after exclusions).");
 
-      // Now compress each route's districts into neat ranges
       for (const [route, districts] of routeDistricts.entries()){
         const grouped = groupDistrictsToRanges(districts);
         routePostcodeGroups.set(route, grouped);
@@ -765,7 +726,6 @@ td.routeCell:hover{
       for (const route of routes){
         const tr = document.createElement("tr");
 
-        // Route cell with tooltip
         const tdRoute = document.createElement("td");
         tdRoute.className = "routeCell";
 
@@ -952,5 +912,3 @@ td.routeCell:hover{
   </script>
 </body>
 </html>
-
-
