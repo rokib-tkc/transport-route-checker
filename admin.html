@@ -11,9 +11,9 @@
       --routecol:#e6e6e6;
       --inactive:#f7f7f7;
 
-      --green:#00b050;   /* Available run */
-      --red:#ff0000;     /* Full - On Weight */
-      --orange:#ffc000;  /* Full - On Drops */
+      --green:#00b050;
+      --red:#ff0000;
+      --orange:#ffc000;
 
       --text:#111;
     }
@@ -54,12 +54,12 @@
     /* ---------- TOP LAYOUT ---------- */
     .top{
       max-width: 1400px;
-      margin: 0 auto 14px;
+      margin: 0 auto 10px;
       text-align: center;
     }
     h1{
-      margin: 0 0 10px;
-      font-size: 24px;       /* slightly larger */
+      margin: 0 0 8px;
+      font-size: 24px;
       font-weight: 800;
       letter-spacing: .2px;
     }
@@ -79,12 +79,12 @@
       gap:10px;
       flex-wrap:wrap;
       align-items:center;
-      justify-content:center;   /* centred buttons */
-      margin: 0 0 12px;         /* space under buttons */
+      justify-content:center;
+      margin: 0 0 10px;
     }
 
     .status{
-      margin: 0 auto 14px;      /* moved under header/buttons area */
+      margin: 0 auto 12px;
       font-size: 13px;
       color: #333;
       min-height: 18px;
@@ -97,7 +97,7 @@
       flex-wrap:wrap;
       align-items:center;
       justify-content:center;
-      margin: 18px 0 14px;      /* more space above/below */
+      margin: 14px 0 10px;  /* space above/below legend */
       font-size: 13px;
     }
     .chip{display:inline-flex;align-items:center;gap:6px}
@@ -107,42 +107,39 @@
     .wrap{
       max-width: 1400px;
       margin: 0 auto;
-      overflow-x: auto;
       border: 1px solid #ccc;
       border-radius: 12px;
+      overflow: hidden; /* no horizontal scroll - keep full view */
     }
 
     table{
       border-collapse: collapse;
       width: 100%;
-      table-layout: fixed;      /* forces consistent column widths */
-      min-width: 1100px;
+      table-layout: fixed; /* equalise column widths within available space */
+      min-width: 0;        /* allow shrink to fit */
     }
 
     th, td{
       border: 1px solid var(--border);
-      padding: 10px 8px;        /* taller rows */
+      padding: 7px 6px;    /* slightly larger than original, not huge */
       text-align: center;
       vertical-align: middle;
-      height: 48px;             /* a touch larger */
-      word-break: break-word;   /* wrap long text */
-      white-space: normal;      /* allow wrap */
+      height: 36px;        /* modest increase */
+      font-size: 13px;
+      word-break: break-word;
+      white-space: normal;
     }
 
     th{
       background: var(--header);
       font-weight: 800;
-      font-size: 13px;
-      line-height: 1.2;
+      line-height: 1.15;
+      font-size: 12.5px;
     }
 
-    /* Route column fixed width; all date columns equal width */
+    /* Route column - keep sensible but not too wide so all columns fit */
     th.routeHead, td.routeCell{
-      width: 260px;
-    }
-    /* Each date column roughly equal; table-layout:fixed handles equal widths */
-    th:not(.routeHead), td:not(.routeCell){
-      width: 120px;
+      width: 230px;
     }
 
     .routeCell{
@@ -165,9 +162,9 @@
     .fullDrops{background: var(--orange)}
     .pendingOutline{outline:3px solid #00000022;outline-offset:-3px}
 
+    /* Make dropdown text wrap nicely, but keep it compact */
     select{
       width: 100%;
-      max-width: 100%;
       border: 0;
       background: transparent;
       font-weight: 800;
@@ -175,23 +172,24 @@
       appearance: none;
       text-align: center;
       text-align-last: center;
-      white-space: normal;      /* allow wrap inside select */
+      white-space: normal;
       word-break: break-word;
-      line-height: 1.2;
+      line-height: 1.15;
+      font-size: 12.5px;
+      padding: 0;
     }
-
-    /* Optional: make selects look consistent on some browsers */
     select:focus{outline: 2px solid #00000015; outline-offset: 2px;}
 
     /* ---------- HIDE/SHOW ---------- */
     .hidden{display:none !important;}
 
-    /* ---------- SMALL SCREENS ---------- */
-    @media (max-width: 520px){
-      h1{font-size: 20px}
-      .gateRow input{min-width: 200px}
-      th.routeHead, td.routeCell{width: 220px}
-      th:not(.routeHead), td:not(.routeCell){width: 110px}
+    @media (max-width: 1100px){
+      /* If screens are smaller, the table still stays full-width;
+         text will wrap more aggressively. */
+      th, td{font-size: 12px}
+      th{font-size: 12px}
+      select{font-size: 12px}
+      th.routeHead, td.routeCell{width: 210px}
     }
   </style>
 </head>
@@ -199,11 +197,8 @@
 
   <div class="top">
     <h1>Transport Team Admin</h1>
-
-    <!-- Loading/status message moved here (under header) -->
     <div class="status" id="status">Ready.</div>
 
-    <!-- Buttons centred -->
     <div class="bar hidden" id="controls">
       <button class="btn" id="reloadBtn">Reload</button>
       <button class="btn" id="discardBtn" disabled>Discard pending</button>
@@ -211,7 +206,7 @@
     </div>
   </div>
 
-  <!-- TOKEN GATE (only thing visible until Proceed) -->
+  <!-- TOKEN GATE -->
   <div id="gate" class="gateWrap">
     <div style="font-size:13px;color:#444;line-height:1.4;text-align:center">
       Enter the admin token to access the transport status editor.
@@ -227,10 +222,9 @@
     </div>
   </div>
 
-  <!-- APP UI (hidden until token validated) -->
+  <!-- APP UI -->
   <div id="app" class="hidden">
 
-    <!-- Legend moved under buttons with spacing -->
     <div class="legend">
       <span class="chip"><span class="dot" style="background:var(--green)"></span> Available (scheduled run)</span>
       <span class="chip"><span class="dot" style="background:var(--red)"></span> Full - On Weight</span>
@@ -245,14 +239,11 @@
   </div>
 
   <script>
-    /******************************************************************
-     * CONFIG
-     ******************************************************************/
     const CONFIG = {
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
       ROUTES_CSV_URL: "./routes.csv",
       BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
-      DAYS_AHEAD: 10 // working-day columns (weekends + BH skipped)
+      DAYS_AHEAD: 10
     };
 
     const STATUS = {
@@ -261,20 +252,14 @@
       FULL_DROPS: "Full - On Drops"
     };
 
-    /******************************************************************
-     * State
-     ******************************************************************/
-    let sessionToken = "";          // in-memory only
-    const pending = new Map();      // key(date||route) -> {date, route, status}
-    const overrides = new Map();    // key(date||route) -> status
-    const schedule = new Map();     // route -> Set(weekdayIndex)
-    const bankHolidays = new Set(); // Set(YYYY-MM-DD)
-    let dateCols = [];              // [{date, iso, weekday}]
-    const cellByKey = new Map();    // key(date||route) -> td
+    let sessionToken = "";
+    const pending = new Map();
+    const overrides = new Map();
+    const schedule = new Map();
+    const bankHolidays = new Set();
+    let dateCols = [];
+    const cellByKey = new Map();
 
-    /******************************************************************
-     * Elements
-     ******************************************************************/
     const gateEl = document.getElementById("gate");
     const appEl = document.getElementById("app");
     const controlsEl = document.getElementById("controls");
@@ -289,9 +274,6 @@
     const discardBtn = document.getElementById("discardBtn");
     const reloadBtn = document.getElementById("reloadBtn");
 
-    /******************************************************************
-     * Utils
-     ******************************************************************/
     function setStatus(msg){ statusEl.textContent = msg; }
     function pad2(n){ return String(n).padStart(2,"0"); }
     function toISODate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
@@ -413,9 +395,6 @@
       if (sel) sel.value = value;
     }
 
-    /******************************************************************
-     * Token “login” validation (no-op write: Available on dummy route)
-     ******************************************************************/
     async function validateToken(token){
       const today = new Date();
       today.setHours(0,0,0,0);
@@ -437,9 +416,6 @@
       return !!(data && data.ok);
     }
 
-    /******************************************************************
-     * Data loading
-     ******************************************************************/
     async function loadBankHolidays(){
       bankHolidays.clear();
       const res = await fetch(CONFIG.BANK_HOLIDAYS_CSV_URL, { cache:"no-store" });
@@ -513,7 +489,6 @@
         const route = String(row[routeIdx] || "").trim();
         if (!route) continue;
 
-        // Exclusions you requested:
         if (route.toUpperCase().startsWith("3PLCO")) continue;
         if (route.length <= 5) continue;
 
@@ -550,9 +525,6 @@
       }
     }
 
-    /******************************************************************
-     * Grid
-     ******************************************************************/
     function buildGrid(){
       gridEl.innerHTML = "";
       cellByKey.clear();
@@ -699,9 +671,6 @@
       }
     }
 
-    /******************************************************************
-     * Gate behaviour
-     ******************************************************************/
     async function proceed(){
       const token = (gateTokenEl.value || "").trim();
       if (!token){
@@ -725,7 +694,6 @@
 
       sessionToken = token;
 
-      // Show app, hide gate
       gateEl.classList.add("hidden");
       appEl.classList.remove("hidden");
       controlsEl.classList.remove("hidden");
@@ -748,8 +716,6 @@
         e.returnValue = "";
       }
     });
-
-    // No auto-load; token gate shown by default.
   </script>
 </body>
 </html>
