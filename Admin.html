@@ -319,6 +319,12 @@
         const route = String(row[routeIdx] || "").trim();
         if (!route) continue;
 
+        // Exclude 3PLCO rows entirely
+        if (route.toUpperCase().startsWith("3PLCO")) continue;
+
+        // Exclude placeholder-only 5-character route codes (e.g. "TKC01")
+        if (route.length <= 5) continue;
+        
         let days = new Set();
 
         if (dayCols.size >= 5){
@@ -561,3 +567,4 @@
   </script>
 </body>
 </html>
+
