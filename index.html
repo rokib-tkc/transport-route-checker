@@ -54,6 +54,7 @@
       color: #fff;
     }
     button:hover { background: #005ea3; }
+    button:disabled { background: #9bbbd7; cursor: not-allowed; }
 
     .results-header { margin-top: 10px; font-size: 14px; font-weight: bold; }
 
@@ -154,6 +155,37 @@
       </div>
     </div>
 
+    <!-- LANDING: Carrier table shows before any successful search -->
+    <div id="carrierBlock" class="channel-block" style="display:block;">
+      <div class="channel-header">
+        <div class="channel-title">Carrier</div>
+        <div style="font-size:12px; color:#666;">Cut-off: 2pm (Mon–Fri, excluding UK bank holidays)</div>
+      </div>
+
+      <table>
+        <colgroup>
+          <col style="width: 55%">
+          <col style="width: 45%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Route</th>
+            <th>Next Delivery</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>3PLCO Overnight</td>
+            <td class="lead-time" id="carrierOvernightNext">—</td>
+          </tr>
+          <tr>
+            <td>3PLCO 1-3 Day</td>
+            <td class="lead-time" id="carrier13Next">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
     <div id="resultsMeta" class="results-header" style="display:none;"></div>
     <div id="resultsContainer"></div>
 
@@ -174,14 +206,11 @@
     }
 
     function detectDelimiter(headerLine) {
-      // prefer tab if present (your screenshot showed tabs)
       if (headerLine.includes("\t")) return "\t";
       return ",";
     }
 
     function splitLine(line, delim) {
-      // Simple split for your files (no embedded commas/tabs expected).
-      // If you ever need quoted CSV support, tell me and I’ll upgrade this.
       return line.split(delim).map(x => x.trim());
     }
 
@@ -217,10 +246,8 @@
         })
         .then(text => {
           const parsed = parseDelimited(text);
-          const rows = parsed.rows;
-
           const out = {};
-          rows.forEach(row => {
+          parsed.rows.forEach(row => {
             const channel = (row.channel || "").trim();
             const rulesCell = (row.rules || "").trim();
             if (!channel) return;
@@ -230,7 +257,6 @@
             if (parts.length) html += "<br>" + parts.map(p => "- " + p).join("<br>");
             out[channel] = html;
           });
-
           channelRules = out;
         })
         .catch(err => {
@@ -244,6 +270,7 @@
     // ============================================================
 
     let bankHolidaySet = new Set(); // ISO YYYY-MM-DD
+    let bankHolidaysReady = Promise.resolve();
 
     function toISODateKey(dateObj) {
       const y = dateObj.getFullYear();
@@ -260,11 +287,10 @@
         })
         .then(text => {
           const parsed = parseDelimited(text);
-          const rows = parsed.rows;
-
           const set = new Set();
-          rows.forEach(row => {
-            const d = (row.date || "").trim();           // YYYY-MM-DD
+
+          parsed.rows.forEach(row => {
+            const d = (row.date || "").trim();           // expected YYYY-MM-DD
             const div = (row.division || "").trim();     // england-and-wales
             if (!d) return;
             if (!div || div === "england-and-wales") set.add(d);
@@ -288,9 +314,7 @@
 
     function parseRoutes(text) {
       const parsed = parseDelimited(text);
-      const rows = parsed.rows;
-
-      return rows.map(row => {
+      return parsed.rows.map(row => {
         const daysArray = String(row.days || "")
           .split("|")
           .map(d => d.trim())
@@ -304,11 +328,11 @@
           leadTime: String(row.leadTime || "").trim(),
           days: daysArray
         };
-      }).filter(r => r.prefix && r.channel); // drop junk rows
+      }).filter(r => r.prefix && r.channel);
     }
 
     // ============================================================
-    // NEXT DELIVERY CALCULATION (2pm cutoff + working days + bank holidays)
+    // WORKING DAY + CUTOFF HELPERS (used by channels and Carrier)
     // ============================================================
 
     function parseLeadTimeWorkingDays(leadTimeText) {
@@ -358,11 +382,7 @@
       return `${day} ${dateStr}`;
     }
 
-    function findNextDeliveryDate(allowedDays, leadTimeText) {
-      if (!Array.isArray(allowedDays) || allowedDays.length === 0) return null;
-
-      const allowed = new Set(allowedDays.map(d => String(d).trim().toLowerCase()));
-
+    function getStartDateConsideringCutoff() {
       const now = new Date();
       const cutoffHour = 14; // 2pm
       const afterCutoff = (now.getHours() > cutoffHour) || (now.getHours() === cutoffHour && now.getMinutes() > 0);
@@ -371,13 +391,46 @@
       if (!isWorkingDay(start)) start = nextWorkingDay(start);
       if (afterCutoff) start = nextWorkingDay(start);
 
+      return start;
+    }
+
+    // Carrier next dates
+    function computeCarrierNextDates() {
+      const start = getStartDateConsideringCutoff();
+
+      // Overnight = next working day
+      const overnight = addWorkingDays(start, 1);
+
+      // 1-3 day = 3rd working day from start
+      const day3 = addWorkingDays(start, 3);
+
+      const overnightEl = document.getElementById("carrierOvernightNext");
+      const day3El = document.getElementById("carrier13Next");
+
+      overnightEl.textContent = formatDayDate(overnight);
+      day3El.textContent = formatDayDate(day3);
+    }
+
+    // ============================================================
+    // CHANNEL NEXT DELIVERY CALCULATION (days + lead time + cutoff + bank hols)
+    // ============================================================
+
+    function findNextDeliveryDate(allowedDays, leadTimeText) {
+      if (!Array.isArray(allowedDays) || allowedDays.length === 0) return null;
+
+      const allowed = new Set(allowedDays.map(d => String(d).trim().toLowerCase()));
+      const start = getStartDateConsideringCutoff();
       const leadDays = parseLeadTimeWorkingDays(leadTimeText);
+
       const earliest = (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
 
       let d = startOfDay(earliest);
-      for (let i = 0; i < 90; i++) {
+      for (let i = 0; i < 120; i++) {
         const dayLower = weekdayName(d).toLowerCase();
+
+        // IMPORTANT: delivery date itself must be a working day (skips bank holidays)
         if (allowed.has(dayLower) && d >= earliest && isWorkingDay(d)) return d;
+
         d.setDate(d.getDate() + 1);
       }
       return null;
@@ -417,6 +470,7 @@
     function buildResultsHTML(rows, usedPrefix, originalInput) {
       const grouped = groupByChannel(rows);
       const channels = Object.keys(grouped).sort();
+
       const resultsContainer = document.getElementById("resultsContainer");
       const resultsMeta = document.getElementById("resultsMeta");
       const noResults = document.getElementById("noResults");
@@ -458,10 +512,10 @@
             <table>
               <colgroup>
                 <col style="width: 22%">
-                <col style="width: 35%">
+                <col style="width: 30%">
                 <col style="width: 12%">
                 <col style="width: 12%">
-                <col style="width: 19%">
+                <col style="width: 24%">
               </colgroup>
               <thead>
                 <tr>
@@ -532,15 +586,35 @@
     }
 
     // ============================================================
+    // LANDING / VISIBILITY CONTROL
+    // ============================================================
+
+    function showLandingCarrier() {
+      document.getElementById("carrierBlock").style.display = "block";
+      document.getElementById("resultsMeta").style.display = "none";
+      document.getElementById("resultsContainer").innerHTML = "";
+      document.getElementById("noResults").style.display = "none";
+    }
+
+    function hideLandingCarrier() {
+      document.getElementById("carrierBlock").style.display = "none";
+    }
+
+    // ============================================================
     // SEARCH HANDLING (FETCH ROUTES ON EACH SEARCH)
     // ============================================================
 
-    function performSearch() {
+    async function performSearch() {
       const input = document.getElementById("postcodeInput").value.trim();
       if (!input) {
-        alert("Please enter a postcode or prefix.");
+        showLandingCarrier();
+        document.getElementById("noResults").style.display = "block";
+        document.getElementById("noResults").textContent = "Please enter a postcode or prefix.";
         return;
       }
+
+      // ensure bank holidays are loaded before calculating next-delivery dates
+      await bankHolidaysReady;
 
       const cleaned = normaliseInputPostcode(input);
       const url = "routes.csv?cb=" + Date.now();
@@ -555,17 +629,22 @@
           const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
 
           if (!bestPrefix) {
-            document.getElementById("resultsContainer").innerHTML = "";
-            document.getElementById("resultsMeta").style.display = "none";
+            // keep carrier visible if no match
+            showLandingCarrier();
             document.getElementById("noResults").style.display = "block";
+            document.getElementById("noResults").textContent = "No routing information found for that postcode prefix.";
             return;
           }
+
+          // valid match: hide landing carrier and show results
+          hideLandingCarrier();
 
           const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
           buildResultsHTML(matchingRows, bestPrefix, input);
         })
         .catch(err => {
           console.error("Error loading routes.csv:", err);
+          showLandingCarrier();
           alert("Routing data is not available at the moment. Please try again in a moment or contact the system owner.");
         });
     }
@@ -575,13 +654,32 @@
       if (e.key === "Enter") { e.preventDefault(); performSearch(); }
     });
 
-    // Load supporting CSVs once on page load
-    loadChannelRules();
-    loadBankHolidays();
+    // ============================================================
+    // INIT
+    // ============================================================
+
+    (function init() {
+      // Load channel rules in background
+      loadChannelRules();
+
+      // Disable search until bank holidays are ready (prevents wrong next-delivery values)
+      const btn = document.getElementById("searchButton");
+      btn.disabled = true;
+
+      bankHolidaysReady = loadBankHolidays().finally(() => {
+        btn.disabled = false;
+
+        // Now we can compute landing Carrier dates accurately
+        computeCarrierNextDates();
+
+        // Keep Carrier dates accurate if tab stays open across 2pm / date change
+        setInterval(computeCarrierNextDates, 60 * 1000);
+        window.addEventListener("focus", computeCarrierNextDates);
+      });
+
+      // Show landing carrier at start
+      showLandingCarrier();
+    })();
   </script>
 </body>
 </html>
-
-
-
-
