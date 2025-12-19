@@ -1,11 +1,3 @@
-<!--
-FILE NAME: admin.html
-
-Place this file in the ROOT of your GitHub Pages repo (same level as routes.csv and bank_holidays.csv)
-
-Admin page URL:
-https://rokib-tkc.github.io/transport-route-checker/admin.html
--->
 <!doctype html>
 <html lang="en-GB">
 <head>
@@ -237,6 +229,33 @@ https://rokib-tkc.github.io/transport-route-checker/admin.html
       font-weight: 600;
       color: #333;
     }
+
+    /* Give tbody its own stacking context */
+tbody{
+  position: relative;
+  z-index: 1;
+}
+
+/* Lift the hovered row above other rows */
+tbody tr:hover{
+  position: relative;
+  z-index: 50;
+}
+
+/* Lift the sticky route cell above other cells when hovered */
+td.routeCell:hover{
+  z-index: 200;
+}
+
+/* Lift the routeName wrapper above the row */
+.routeName:hover{
+  z-index: 300;
+}
+
+/* Ensure the tooltip itself is on top */
+.routeTooltip{
+  z-index: 9999;
+}
 
     /* ---------- HIDE/SHOW ---------- */
     .hidden{display:none !important;}
@@ -915,3 +934,4 @@ https://rokib-tkc.github.io/transport-route-checker/admin.html
   </script>
 </body>
 </html>
+
