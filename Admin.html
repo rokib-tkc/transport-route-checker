@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Transport Team Admin</title>
+  <style>
+    :root{
+      --border:#cfcfcf;
+      --header:#efefef;
+      --routecol:#e6e6e6;
+      --inactive:#f7f7f7;
+
+      --green:#00b050;   /* Available run */
+      --red:#ff0000;     /* Full - On Weight */
+      --orange:#ffc000;  /* Full - On Drops */
+
+      --text:#111;
+    }
+
+    body{font-family:Arial,sans-serif;margin:16px;color:var(--text)}
+    h1{margin:0 0 10px;font-size:20px}
+
+    .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0 14px}
+    .bar label{display:flex;gap:8px;align-items:center}
+    input[type="password"]{padding:6px 8px;width:220px}
+
+    .btn{padding:7px 10px;cursor:pointer;border:1px solid #bbb;background:#fff;border-radius:6px}
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+
+    .status{margin-left:auto;font-size:13px;color:#333}
+    .hint{font-size:13px;color:#444;margin:0 0 12px;line-height:1.35}
+    code{background:#f3f3f3;padding:1px 4px;border-radius:4px}
+
+    .wrap{overflow-x:auto;border:1px solid #ccc;border-radius:10px}
+    table{border-collapse:collapse;width:100%;min-width:980px}
+    th,td{border:1px solid var(--border);padding:6px;text-align:center;vertical-align:middle}
+    th{background:var(--header);font-weight:700}
+
+    .routeCell{background:var(--routecol);font-weight:700;text-align:left;min-width:240px;position:sticky;left:0;z-index:2}
+    th.routeHead{position:sticky;left:0;z-index:3}
+
+    .inactive{background:var(--inactive)}
+    .runAvailable{background:var(--green)}
+    .fullWeight{background:var(--red);color:#fff}
+    .fullDrops{background:var(--orange)}
+
+    .pendingOutline{outline:3px solid #00000022;outline-offset:-3px}
+
+    select{
+      width:100%;
+      padding:2px 4px;
+      border:0;
+      background:transparent;
+      font-weight:700;
+      appearance:none;
+      text-align-last:center;
+      cursor:pointer;
+    }
+
+    .legend{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:12px 0 0;font-size:13px}
+    .chip{display:inline-flex;align-items:center;gap:6px}
+    .dot{width:12px;height:12px;border-radius:2px;display:inline-block;border:1px solid #999}
+  </style>
+</head>
+<body>
+  <h1>Transport Team Admin</h1>
+
+  <div class="bar">
+    <label>
+      Admin token:
+      <input id="token" type="password" placeholder="Leave blank if not used" />
+    </label>
+
+    <button class="btn" id="reloadBtn">Reload</button>
+    <button class="btn" id="discardBtn" disabled>Discard pending</button>
+    <button class="btn" id="saveBtn" disabled>Save changes</button>
+
+    <div class="status" id="status">Ready.</div>
+  </div>
+
+  <p class="hint">
+    This page builds the green schedule from <code>routes.csv</code> and overlays “full” statuses from Google Sheets.
+    Only “full” rows are stored in the sheet. Returning a cell to “Available” removes the override row.
+    Nothing is written until you click <b>Save changes</b>.
+  </p>
+
+  <div class="wrap">
+    <table id="grid"></table>
+  </div>
+
+  <div class="legend">
+    <span class="chip"><span class="dot" style="background:var(--green)"></span> Available (scheduled run)</span>
+    <span class="chip"><span class="dot" style="background:var(--red)"></span> Full - On Weight</span>
+    <span class="chip"><span class="dot" style="background:var(--orange)"></span> Full - On Drops</span>
+    <span class="chip"><span class="dot" style="background:var(--inactive)"></span> Not a run day</span>
+  </div>
+
+  <script>
+    /******************************************************************
+     * CONFIG — already filled with your URLs
+     ******************************************************************/
+    const CONFIG = {
+      API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
+      ROUTES_CSV_URL: "./routes.csv",
+      DAYS_AHEAD: 10
+    };
+
+    /******************************************************************
+     * Status values (must match what your API expects)
+     ******************************************************************/
+    const STATUS = {
+      AVAILABLE: "Available",
+      FULL_WEIGHT: "Full - On Weight",
+      FULL_DROPS: "Full - On Drops"
+    };
+
+    // pending changes: key(date||route) -> {date, route, status}
+    const pending = new Map();
+
+    // overrides loaded from sheet/API: key(date||route) -> status
+    const overrides = new Map();
+
+    // schedule inferred from routes.csv: route -> Set(weekdayIndex 0-6)
+    const schedule = new Map();
+
+    // date columns for the grid: [{date, iso, weekday}]
+    let dateCols = [];
+
+    // store cell elements by key for quick UI updates
+    const cellByKey = new Map(); // key(date||route) -> td element
+
+    const gridEl = document.getElementById("grid");
+    const statusEl = document.getElementById("status");
+    const saveBtn = document.getElementById("saveBtn");
+    const discardBtn = document.getElementById("discardBtn");
+    const reloadBtn = document.getElementById("reloadBtn");
+    const tokenInput = document.getElementById("token");
+
+    /******************************************************************
+     * Utils
+     ******************************************************************/
+    function setStatus(msg){ statusEl.textContent = msg; }
+    function pad2(n){ return String(n).padStart(2,"0"); }
+    function toISODate(d){
+      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    }
+    function addDays(date, days){
+      const d = new Date(date);
+      d.setDate(d.getDate()+days);
+      return d;
+    }
+    function weekdayLabel(d){ return d.toLocaleDateString("en-GB",{weekday:"short"}); }
+    function displayDate(d){
+      return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${String(d.getFullYear()).slice(-2)}`;
+    }
+    function key(dateISO, route){ return `${dateISO}||${route}`; }
+
+    function normaliseHeader(h){ return String(h||"").trim().toLowerCase(); }
+
+    function truthy(v){
+      const s = String(v||"").trim().toLowerCase();
+      return !!(s && s !== "0" && s !== "no" && s !== "false" && s !== "n");
+    }
+
+    function weekdayIndexFromName(name){
+      const n = String(name||"").trim().toLowerCase();
+      const map = {
+        "sun":0,"sunday":0,
+        "mon":1,"monday":1,
+        "tue":2,"tues":2,"tuesday":2,
+        "wed":3,"wednesday":3,
+        "thu":4,"thur":4,"thurs":4,"thursday":4,
+        "fri":5,"friday":5,
+        "sat":6,"saturday":6
+      };
+      return (n in map) ? map[n] : null;
+    }
+
+    function parseDeliveryDaysString(s){
+      const out = new Set();
+      const raw = String(s||"").trim();
+      if (!raw) return out;
+
+      // Accept "Mon, Wed, Fri" / "Mon/Wed/Fri" / "Mon Wed Fri"
+      const parts = raw.split(/[^A-Za-z]+/).filter(Boolean);
+      for (const p of parts){
+        const idx = weekdayIndexFromName(p);
+        if (idx !== null) out.add(idx);
+      }
+      return out;
+    }
+
+    // basic CSV parser (handles quoted commas)
+    function parseCSV(text){
+      const rows = [];
+      let cur = [];
+      let val = "";
+      let inQuotes = false;
+
+      for (let i=0;i<text.length;i++){
+        const ch = text[i];
+        const next = text[i+1];
+
+        if (ch === '"' && inQuotes && next === '"'){ val+='"'; i++; continue; }
+        if (ch === '"'){ inQuotes = !inQuotes; continue; }
+
+        if (ch === "," && !inQuotes){ cur.push(val); val=""; continue; }
+
+        if ((ch === "\n" || ch === "\r") && !inQuotes){
+          if (val.length || cur.length){
+            cur.push(val);
+            rows.push(cur.map(c => c.trim()));
+          }
+          val=""; cur=[];
+          if (ch === "\r" && next === "\n") i++;
+          continue;
+        }
+
+        val += ch;
+      }
+      if (val.length || cur.length){
+        cur.push(val);
+        rows.push(cur.map(c => c.trim()));
+      }
+      return rows.filter(r => r.some(c => c !== ""));
+    }
+
+    function updateButtons(){
+      const n = pending.size;
+      saveBtn.disabled = (n === 0);
+      discardBtn.disabled = (n === 0);
+      saveBtn.textContent = (n === 0) ? "Save changes" : `Save changes (${n})`;
+    }
+
+    function buildDateCols(){
+      const start = new Date();
+      start.setHours(0,0,0,0);
+
+      dateCols = [];
+      for (let i=0;i<CONFIG.DAYS_AHEAD;i++){
+        const d = addDays(start, i);
+        dateCols.push({ date:d, iso:toISODate(d), weekday:d.getDay() });
+      }
+    }
+
+    function routeRunsOn(route, weekdayIndex){
+      const days = schedule.get(route);
+      return days ? days.has(weekdayIndex) : false;
+    }
+
+    function getEffectiveStatus(dateISO, route){
+      // Priority: pending change > sheet override > available
+      const k = key(dateISO, route);
+      if (pending.has(k)) return pending.get(k).status;
+      if (overrides.has(k)) return overrides.get(k);
+      return STATUS.AVAILABLE;
+    }
+
+    function applyCellStyle(td, dateISO, route){
+      td.classList.remove("inactive","runAvailable","fullWeight","fullDrops","pendingOutline");
+
+      const runs = routeRunsOn(route, dateCols.find(c => c.iso === dateISO).weekday);
+
+      if (!runs){
+        td.classList.add("inactive");
+        td.textContent = ""; // keep clean
+        return;
+      }
+
+      const st = getEffectiveStatus(dateISO, route);
+      if (st === STATUS.FULL_WEIGHT) td.classList.add("fullWeight");
+      else if (st === STATUS.FULL_DROPS) td.classList.add("fullDrops");
+      else td.classList.add("runAvailable");
+
+      if (pending.has(key(dateISO, route))) td.classList.add("pendingOutline");
+    }
+
+    function setSelectValueInCell(td, value){
+      const sel = td.querySelector("select");
+      if (sel) sel.value = value;
+    }
+
+    /******************************************************************
+     * Load schedule from routes.csv
+     * Supports two styles:
+     *  A) Route, Mon, Tue, Wed... columns
+     *  B) Route, DeliveryDays column
+     ******************************************************************/
+    async function loadScheduleFromCSV(){
+      setStatus("Loading routes.csv...");
+      const res = await fetch(CONFIG.ROUTES_CSV_URL, { cache:"no-store" });
+      if (!res.ok) throw new Error(`Failed to load routes.csv (${res.status})`);
+      const text = await res.text();
+      const rows = parseCSV(text);
+      if (rows.length < 2) throw new Error("routes.csv has no data rows");
+
+      const headers = rows[0].map(normaliseHeader);
+
+      const routeIdx = headers.findIndex(h =>
+        h === "route" || h === "routename" || h === "route name" || h === "routecode" || h === "route_code"
+      );
+      if (routeIdx === -1) throw new Error("routes.csv must include a 'Route' column header named Route");
+
+      const dayCols = new Map(); // weekdayIndex -> col index
+      headers.forEach((h,i)=>{
+        const idx = weekdayIndexFromName(h);
+        if (idx !== null) dayCols.set(idx, i);
+      });
+
+      const deliveryDaysIdx = headers.findIndex(h =>
+        h === "deliverydays" || h === "delivery days" || h === "days" || h === "run days" || h === "rundays"
+      );
+
+      schedule.clear();
+
+      for (let r=1; r<rows.length; r++){
+        const row = rows[r];
+        const route = String(row[routeIdx] || "").trim();
+        if (!route) continue;
+
+        let days = new Set();
+
+        if (dayCols.size >= 5){
+          for (const [w, col] of dayCols.entries()){
+            if (truthy(row[col])) days.add(w);
+          }
+        } else if (deliveryDaysIdx !== -1) {
+          days = parseDeliveryDaysString(row[deliveryDaysIdx]);
+        } else {
+          continue;
+        }
+
+        if (days.size) schedule.set(route, days);
+      }
+
+      if (schedule.size === 0){
+        throw new Error("No route schedules inferred from routes.csv. Ensure it has Mon/Tue/... columns or DeliveryDays.");
+      }
+
+      setStatus(`Loaded ${schedule.size} routes from routes.csv.`);
+    }
+
+    /******************************************************************
+     * Load overrides from API for date range
+     ******************************************************************/
+    async function loadOverrides(fromISO, toISO){
+      overrides.clear();
+      setStatus("Loading status overrides from Google Sheet...");
+
+      const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`;
+      const res = await fetch(url, { cache:"no-store" });
+
+      const data = await res.json().catch(()=>null);
+      if (!data || !data.ok) throw new Error(`API failed: ${(data && data.error) ? data.error : "Unknown error"}`);
+
+      // Latest wins if duplicates exist (we just overwrite)
+      for (const row of (data.rows || [])){
+        const date = String(row.date || "").trim();
+        const route = String(row.route || "").trim();
+        const status = String(row.status || "").trim();
+        if (!date || !route || !status) continue;
+        overrides.set(key(date, route), status);
+      }
+
+      setStatus(`Loaded ${overrides.size} override(s).`);
+    }
+
+    /******************************************************************
+     * Build the grid
+     ******************************************************************/
+    function buildGrid(){
+      gridEl.innerHTML = "";
+      cellByKey.clear();
+
+      const routes = Array.from(schedule.keys()).sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
+
+      // Header
+      const thead = document.createElement("thead");
+      const hr = document.createElement("tr");
+
+      const thRoute = document.createElement("th");
+      thRoute.textContent = "Route";
+      thRoute.className = "routeHead routeCell";
+      hr.appendChild(thRoute);
+
+      for (const c of dateCols){
+        const th = document.createElement("th");
+        th.innerHTML = `${weekdayLabel(c.date)}<br>${displayDate(c.date)}`;
+        hr.appendChild(th);
+      }
+      thead.appendChild(hr);
+      gridEl.appendChild(thead);
+
+      // Body
+      const tbody = document.createElement("tbody");
+
+      for (const route of routes){
+        const tr = document.createElement("tr");
+
+        const tdRoute = document.createElement("td");
+        tdRoute.textContent = route;
+        tdRoute.className = "routeCell";
+        tr.appendChild(tdRoute);
+
+        for (const c of dateCols){
+          const td = document.createElement("td");
+
+          const runs = routeRunsOn(route, c.weekday);
+
+          if (!runs){
+            td.className = "inactive";
+            td.textContent = "";
+          } else {
+            // Dropdown only on run days
+            const sel = document.createElement("select");
+            sel.innerHTML = `
+              <option value="${STATUS.AVAILABLE}">${STATUS.AVAILABLE}</option>
+              <option value="${STATUS.FULL_WEIGHT}">${STATUS.FULL_WEIGHT}</option>
+              <option value="${STATUS.FULL_DROPS}">${STATUS.FULL_DROPS}</option>
+            `;
+
+            // initial value (sheet override or available)
+            const k = key(c.iso, route);
+            const initial = overrides.get(k) || STATUS.AVAILABLE;
+            sel.value = initial;
+
+            sel.addEventListener("change", () => {
+              const chosen = sel.value;
+
+              // Record pending change (even if chosen matches current override, we still allow;
+              // users can "set" then Save to enforce, or discard it)
+              pending.set(k, { date: c.iso, route, status: chosen });
+              updateButtons();
+
+              applyCellStyle(td, c.iso, route);
+              setStatus(`Pending: ${route} on ${c.iso} -> ${chosen}`);
+            });
+
+            td.appendChild(sel);
+            applyCellStyle(td, c.iso, route);
+
+            cellByKey.set(k, td);
+          }
+
+          tr.appendChild(td);
+        }
+
+        tbody.appendChild(tr);
+      }
+
+      gridEl.appendChild(tbody);
+    }
+
+    /******************************************************************
+     * Discard pending changes (revert UI to sheet state)
+     ******************************************************************/
+    function discardPending(){
+      pending.clear();
+      updateButtons();
+
+      for (const [k, td] of cellByKey.entries()){
+        const [dateISO, route] = k.split("||");
+        const st = overrides.get(k) || STATUS.AVAILABLE;
+        setSelectValueInCell(td, st);
+        applyCellStyle(td, dateISO, route);
+      }
+
+      setStatus("Pending changes discarded.");
+    }
+
+    /******************************************************************
+     * Save pending changes in one batch
+     *
+     * IMPORTANT: to avoid Apps Script CORS preflight issues,
+     * we send Content-Type: text/plain with a JSON string body.
+     ******************************************************************/
+    async function savePending(){
+      if (pending.size === 0) return;
+
+      const changes = Array.from(pending.values());
+      const token = tokenInput.value || "";
+
+      setStatus(`Saving ${changes.length} change(s)...`);
+
+      const payload = JSON.stringify({
+        action: "batch",
+        token,
+        changes
+      });
+
+      const res = await fetch(CONFIG.API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: payload
+      });
+
+      const data = await res.json().catch(()=>null);
+
+      if (!data || !data.ok){
+        setStatus(`Save failed: ${(data && data.error) ? data.error : "Unknown error"}`);
+        return;
+      }
+
+      // After save: reload overrides fresh, then rebuild styles
+      pending.clear();
+      updateButtons();
+
+      await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
+
+      for (const [k, td] of cellByKey.entries()){
+        const [dateISO, route] = k.split("||");
+        const st = overrides.get(k) || STATUS.AVAILABLE;
+        setSelectValueInCell(td, st);
+        applyCellStyle(td, dateISO, route);
+      }
+
+      setStatus(`Saved. Removed ${data.deleted || 0}, added ${data.appended || 0}.`);
+    }
+
+    /******************************************************************
+     * Full reload (routes.csv + overrides + rebuild)
+     ******************************************************************/
+    async function fullReload(){
+      try{
+        setStatus("Reloading...");
+        pending.clear();
+        updateButtons();
+
+        buildDateCols();
+        await loadScheduleFromCSV();
+        await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
+        buildGrid();
+
+        setStatus("Loaded.");
+      }catch(err){
+        setStatus(`Error: ${String(err.message || err)}`);
+        console.error(err);
+      }
+    }
+
+    /******************************************************************
+     * Warn user if they try to close with pending changes
+     ******************************************************************/
+    window.addEventListener("beforeunload", (e) => {
+      if (pending.size > 0){
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    });
+
+    /******************************************************************
+     * Wire buttons
+     ******************************************************************/
+    reloadBtn.addEventListener("click", fullReload);
+    discardBtn.addEventListener("click", discardPending);
+    saveBtn.addEventListener("click", savePending);
+
+    // Initial load
+    fullReload();
+  </script>
+</body>
+</html>
