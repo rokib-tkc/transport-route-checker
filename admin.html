@@ -119,6 +119,24 @@
       min-width: 0;
     }
 
+    /* ---------- STICKY HEADER ROW (dates always visible) ---------- */
+thead th{
+  position: sticky;
+  top: 0;
+  z-index: 10;              /* above body cells */
+}
+
+/* Keep the top-left "Route" header above everything */
+th.routeHead{
+  z-index: 25;              /* above sticky header + sticky route column */
+}
+
+/* Keep sticky route cells above normal cells (but below header) */
+td.routeCell{
+  z-index: 6;
+}
+
+
     th, td{
       border: 1px solid var(--border);
       padding: 7px 6px;     /* compact */
@@ -934,4 +952,5 @@ td.routeCell:hover{
   </script>
 </body>
 </html>
+
 
