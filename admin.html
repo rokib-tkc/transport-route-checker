@@ -1,3 +1,11 @@
+<!--
+FILE NAME: admin.html
+
+Place this file in the ROOT of your GitHub Pages repo (same level as routes.csv and bank_holidays.csv)
+
+Admin page URL:
+https://rokib-tkc.github.io/transport-route-checker/admin.html
+-->
 <!doctype html>
 <html lang="en-GB">
 <head>
@@ -97,7 +105,7 @@
       flex-wrap:wrap;
       align-items:center;
       justify-content:center;
-      margin: 14px 0 10px;  /* space above/below legend */
+      margin: 14px 0 10px;
       font-size: 13px;
     }
     .chip{display:inline-flex;align-items:center;gap:6px}
@@ -109,22 +117,22 @@
       margin: 0 auto;
       border: 1px solid #ccc;
       border-radius: 12px;
-      overflow: hidden; /* no horizontal scroll - keep full view */
+      overflow: hidden; /* keep full view, no horizontal scroll */
     }
 
     table{
       border-collapse: collapse;
       width: 100%;
-      table-layout: fixed; /* equalise column widths within available space */
-      min-width: 0;        /* allow shrink to fit */
+      table-layout: fixed; /* equal widths within available space */
+      min-width: 0;
     }
 
     th, td{
       border: 1px solid var(--border);
-      padding: 7px 6px;    /* slightly larger than original, not huge */
+      padding: 7px 6px;     /* compact */
       text-align: center;
       vertical-align: middle;
-      height: 36px;        /* modest increase */
+      height: 34px;         /* slight increase vs original */
       font-size: 13px;
       word-break: break-word;
       white-space: normal;
@@ -137,7 +145,7 @@
       font-size: 12.5px;
     }
 
-    /* Route column - keep sensible but not too wide so all columns fit */
+    /* Route column (sticky) */
     th.routeHead, td.routeCell{
       width: 230px;
     }
@@ -149,6 +157,7 @@
       position: sticky;
       left: 0;
       z-index: 2;
+      overflow: visible; /* allow tooltip */
     }
     th.routeHead{
       position: sticky;
@@ -162,7 +171,6 @@
     .fullDrops{background: var(--orange)}
     .pendingOutline{outline:3px solid #00000022;outline-offset:-3px}
 
-    /* Make dropdown text wrap nicely, but keep it compact */
     select{
       width: 100%;
       border: 0;
@@ -180,16 +188,65 @@
     }
     select:focus{outline: 2px solid #00000015; outline-offset: 2px;}
 
+    /* ---------- ROUTE TOOLTIP ---------- */
+    .routeName{
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      cursor: help;
+    }
+    .routeTooltip{
+      position: absolute;
+      left: 0;
+      top: calc(100% + 8px);
+      z-index: 50;
+
+      min-width: 280px;
+      max-width: 520px;
+
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 10px 12px;
+
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      text-align: left;
+
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition: opacity .12s ease, transform .12s ease;
+
+      font-size: 12.5px;
+      line-height: 1.35;
+      color: #111;
+
+      white-space: normal;
+      word-break: break-word;
+    }
+    .routeName:hover .routeTooltip{
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .routeTooltipTitle{
+      font-weight: 800;
+      margin-bottom: 6px;
+      font-size: 12.5px;
+    }
+    .routeTooltipBody{
+      font-weight: 600;
+      color: #333;
+    }
+
     /* ---------- HIDE/SHOW ---------- */
     .hidden{display:none !important;}
 
     @media (max-width: 1100px){
-      /* If screens are smaller, the table still stays full-width;
-         text will wrap more aggressively. */
       th, td{font-size: 12px}
       th{font-size: 12px}
       select{font-size: 12px}
       th.routeHead, td.routeCell{width: 210px}
+      .routeTooltip{min-width: 240px; max-width: 360px;}
     }
   </style>
 </head>
@@ -224,7 +281,6 @@
 
   <!-- APP UI -->
   <div id="app" class="hidden">
-
     <div class="legend">
       <span class="chip"><span class="dot" style="background:var(--green)"></span> Available (scheduled run)</span>
       <span class="chip"><span class="dot" style="background:var(--red)"></span> Full - On Weight</span>
@@ -235,7 +291,6 @@
     <div class="wrap">
       <table id="grid"></table>
     </div>
-
   </div>
 
   <script>
@@ -259,6 +314,10 @@
     const bankHolidays = new Set();
     let dateCols = [];
     const cellByKey = new Map();
+
+    // Tooltip data built per session from routes.csv "prefix" column:
+    // route -> "B1–B20; DE2–DE10; ..."
+    const routePostcodeGroups = new Map();
 
     const gateEl = document.getElementById("gate");
     const appEl = document.getElementById("app");
@@ -395,6 +454,90 @@
       if (sel) sel.value = value;
     }
 
+    // ---------- Prefix grouping helpers (from routes.csv "prefix" column) ----------
+    function normaliseDistrictToken(token){
+      // Supports: B1, b01, DE2, DE10, de-10, etc.
+      // Ignores anything that isn't 1–2 letters + 1–2 digits (optionally with a trailing letter)
+      const t = String(token || "").trim().toUpperCase();
+      const m = t.match(/^([A-Z]{1,2})\s*0*(\d{1,2})([A-Z]?)$/);
+      if (!m) return null;
+      const area = m[1];
+      const num = parseInt(m[2], 10);
+      const suffix = m[3] || "";
+      if (!Number.isFinite(num)) return null;
+      return { area, num, suffix, raw: `${area}${num}${suffix}` };
+    }
+
+    function extractDistrictsFromPrefixCell(cell){
+      // Split on common separators. Also handles "B1-B20" style by extracting B1 and B20.
+      const text = String(cell || "").toUpperCase();
+
+      // Find tokens like B1, DE10, etc anywhere in the string
+      const matches = text.match(/[A-Z]{1,2}\s*0*\d{1,2}[A-Z]?/g) || [];
+      const out = [];
+      for (const m of matches){
+        const d = normaliseDistrictToken(m.replace(/\s+/g,""));
+        if (d) out.push(d);
+      }
+      return out;
+    }
+
+    function groupDistrictsToRanges(districts){
+      // Group only “pure numeric” districts (no suffix). Keep suffix ones as individual tokens.
+      const byAreaNums = new Map();   // area -> Set(nums)
+      const suffixTokens = new Map(); // area -> Set(raw tokens with suffix)
+
+      for (const d of districts){
+        if (!d) continue;
+        if (d.suffix){
+          if (!suffixTokens.has(d.area)) suffixTokens.set(d.area, new Set());
+          suffixTokens.get(d.area).add(d.raw);
+          continue;
+        }
+        if (!byAreaNums.has(d.area)) byAreaNums.set(d.area, new Set());
+        byAreaNums.get(d.area).add(d.num);
+      }
+
+      const parts = [];
+      const areas = Array.from(new Set([...byAreaNums.keys(), ...suffixTokens.keys()]))
+        .sort((a,b)=>a.localeCompare(b,"en-GB"));
+
+      for (const area of areas){
+        // numeric ranges
+        const numsSet = byAreaNums.get(area) || new Set();
+        const nums = Array.from(numsSet).sort((a,b)=>a-b);
+
+        if (nums.length){
+          let start = nums[0], prev = nums[0];
+          for (let i=1;i<nums.length;i++){
+            const n = nums[i];
+            if (n === prev + 1){ prev = n; continue; }
+            parts.push(start === prev ? `${area}${start}` : `${area}${start}–${area}${prev}`);
+            start = prev = n;
+          }
+          parts.push(start === prev ? `${area}${start}` : `${area}${start}–${area}${prev}`);
+        }
+
+        // suffix districts (e.g. W1A) - keep as single tokens
+        const sufSet = suffixTokens.get(area);
+        if (sufSet && sufSet.size){
+          const suf = Array.from(sufSet).sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true}));
+          for (const t of suf) parts.push(t);
+        }
+      }
+
+      // Clean ranges to show "DE2–DE10" instead of "DE2–DE10" already fine.
+      // But we can shorten duplicated area at the end: "DE2–DE10" is already correct.
+      const cleaned = parts.map(p => {
+        // If it looks like "DE2–DE10" already ok; if "DE2–DE10" w/ area repeated kept.
+        return p.replace(/^([A-Z]{1,2}\d+)–\1([A-Z]{1,2})(\d+)$/, "$1–$2$3");
+      });
+
+      // Combine with "; " separators for neat wrap
+      return cleaned.join("; ");
+    }
+
+    // ---------- API Token validation ----------
     async function validateToken(token){
       const today = new Date();
       today.setHours(0,0,0,0);
@@ -416,6 +559,7 @@
       return !!(data && data.ok);
     }
 
+    // ---------- Load bank holidays ----------
     async function loadBankHolidays(){
       bankHolidays.clear();
       const res = await fetch(CONFIG.BANK_HOLIDAYS_CSV_URL, { cache:"no-store" });
@@ -423,7 +567,7 @@
 
       const text = await res.text();
       const rows = parseCSV(text);
-      if (rows.length === 0) return;
+      if (!rows.length) return;
 
       let startRow = 0;
       let dateIdx = 0;
@@ -438,6 +582,7 @@
       }
     }
 
+    // ---------- Build next N working-day columns ----------
     function buildDateCols(){
       const start = new Date();
       start.setHours(0,0,0,0);
@@ -457,6 +602,7 @@
       }
     }
 
+    // ---------- Load schedule & build tooltip groups from routes.csv ----------
     async function loadScheduleFromCSV(){
       const res = await fetch(CONFIG.ROUTES_CSV_URL, { cache:"no-store" });
       if (!res.ok) throw new Error(`Failed to load routes.csv (${res.status})`);
@@ -472,6 +618,12 @@
       );
       if (routeIdx === -1) throw new Error("routes.csv must include a 'Route' column");
 
+      // Prefix column for postcode districts (your note: first column is "prefix")
+      const prefixIdx = headers.findIndex(h => h === "prefix");
+      if (prefixIdx === -1) {
+        throw new Error("routes.csv must include a 'prefix' column (postcode prefix/district).");
+      }
+
       const dayCols = new Map();
       headers.forEach((h,i)=>{
         const idx = weekdayIndexFromName(h);
@@ -483,15 +635,21 @@
       );
 
       schedule.clear();
+      routePostcodeGroups.clear();
+
+      const routeDistricts = new Map(); // route -> list of district tokens found from prefix column
 
       for (let r=1; r<rows.length; r++){
         const row = rows[r];
+
         const route = String(row[routeIdx] || "").trim();
         if (!route) continue;
 
+        // Exclusions you requested:
         if (route.toUpperCase().startsWith("3PLCO")) continue;
         if (route.length <= 5) continue;
 
+        // Build schedule
         let days = new Set();
         if (dayCols.size >= 5){
           for (const [w,col] of dayCols.entries()){
@@ -500,15 +658,30 @@
         } else if (deliveryDaysIdx !== -1){
           days = parseDeliveryDaysString(row[deliveryDaysIdx]);
         } else {
+          // no day data; skip
           continue;
         }
 
         if (days.size) schedule.set(route, days);
+
+        // Build tooltip groups from prefix column
+        const prefixCell = row[prefixIdx];
+        if (!routeDistricts.has(route)) routeDistricts.set(route, []);
+        routeDistricts.get(route).push(...extractDistrictsFromPrefixCell(prefixCell));
       }
 
-      if (schedule.size === 0) throw new Error("No route schedules inferred from routes.csv (after exclusions).");
+      if (schedule.size === 0){
+        throw new Error("No route schedules inferred from routes.csv (after exclusions).");
+      }
+
+      // Now compress each route's districts into neat ranges
+      for (const [route, districts] of routeDistricts.entries()){
+        const grouped = groupDistrictsToRanges(districts);
+        routePostcodeGroups.set(route, grouped);
+      }
     }
 
+    // ---------- Load overrides from API ----------
     async function loadOverrides(fromISO, toISO){
       overrides.clear();
       const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`;
@@ -525,6 +698,7 @@
       }
     }
 
+    // ---------- Build grid ----------
     function buildGrid(){
       gridEl.innerHTML = "";
       cellByKey.clear();
@@ -554,9 +728,31 @@
       for (const route of routes){
         const tr = document.createElement("tr");
 
+        // Route cell with tooltip
         const tdRoute = document.createElement("td");
-        tdRoute.textContent = route;
         tdRoute.className = "routeCell";
+
+        const wrap = document.createElement("span");
+        wrap.className = "routeName";
+        wrap.textContent = route;
+
+        const tooltip = document.createElement("div");
+        tooltip.className = "routeTooltip";
+
+        const title = document.createElement("div");
+        title.className = "routeTooltipTitle";
+        title.textContent = "Postcode groups";
+
+        const body = document.createElement("div");
+        body.className = "routeTooltipBody";
+        const groups = routePostcodeGroups.get(route) || "";
+        body.textContent = groups ? groups : "No postcode groups found for this route.";
+
+        tooltip.appendChild(title);
+        tooltip.appendChild(body);
+        wrap.appendChild(tooltip);
+        tdRoute.appendChild(wrap);
+
         tr.appendChild(tdRoute);
 
         for (const c of dateCols){
