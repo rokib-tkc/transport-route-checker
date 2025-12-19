@@ -81,6 +81,7 @@
 
   <p class="hint">
     This page builds the green schedule from <code>routes.csv</code> and overlays “full” statuses from Google Sheets.
+    <b>Weekends and bank holidays are excluded</b> (they won’t appear as columns) using <code>bank_holidays.csv</code>.
     Only “full” rows are stored in the sheet. Returning a cell to “Available” removes the override row.
     Nothing is written until you click <b>Save changes</b>.
   </p>
@@ -98,37 +99,28 @@
 
   <script>
     /******************************************************************
-     * CONFIG — already filled with your URLs
+     * CONFIG — filled with your URLs
      ******************************************************************/
     const CONFIG = {
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
       ROUTES_CSV_URL: "./routes.csv",
-      DAYS_AHEAD: 10
+      BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
+      DAYS_AHEAD: 10 // number of DATE columns shown (weekends & bank holidays skipped)
     };
 
-    /******************************************************************
-     * Status values (must match what your API expects)
-     ******************************************************************/
     const STATUS = {
       AVAILABLE: "Available",
       FULL_WEIGHT: "Full - On Weight",
       FULL_DROPS: "Full - On Drops"
     };
 
-    // pending changes: key(date||route) -> {date, route, status}
-    const pending = new Map();
+    const pending = new Map();     // key(date||route) -> {date, route, status}
+    const overrides = new Map();   // key(date||route) -> status
+    const schedule = new Map();    // route -> Set(weekdayIndex 0-6)
+    const bankHolidays = new Set();// Set("YYYY-MM-DD")
 
-    // overrides loaded from sheet/API: key(date||route) -> status
-    const overrides = new Map();
-
-    // schedule inferred from routes.csv: route -> Set(weekdayIndex 0-6)
-    const schedule = new Map();
-
-    // date columns for the grid: [{date, iso, weekday}]
-    let dateCols = [];
-
-    // store cell elements by key for quick UI updates
-    const cellByKey = new Map(); // key(date||route) -> td element
+    let dateCols = [];             // [{date, iso, weekday}]
+    const cellByKey = new Map();   // key(date||route) -> td
 
     const gridEl = document.getElementById("grid");
     const statusEl = document.getElementById("status");
@@ -142,21 +134,19 @@
      ******************************************************************/
     function setStatus(msg){ statusEl.textContent = msg; }
     function pad2(n){ return String(n).padStart(2,"0"); }
-    function toISODate(d){
-      return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
-    }
-    function addDays(date, days){
-      const d = new Date(date);
-      d.setDate(d.getDate()+days);
-      return d;
-    }
+    function toISODate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+    function addDays(date, days){ const d = new Date(date); d.setDate(d.getDate()+days); return d; }
     function weekdayLabel(d){ return d.toLocaleDateString("en-GB",{weekday:"short"}); }
-    function displayDate(d){
-      return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${String(d.getFullYear()).slice(-2)}`;
-    }
+    function displayDate(d){ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${String(d.getFullYear()).slice(-2)}`; }
     function key(dateISO, route){ return `${dateISO}||${route}`; }
-
     function normaliseHeader(h){ return String(h||"").trim().toLowerCase(); }
+
+    function updateButtons(){
+      const n = pending.size;
+      saveBtn.disabled = (n === 0);
+      discardBtn.disabled = (n === 0);
+      saveBtn.textContent = (n === 0) ? "Save changes" : `Save changes (${n})`;
+    }
 
     function truthy(v){
       const s = String(v||"").trim().toLowerCase();
@@ -181,8 +171,6 @@
       const out = new Set();
       const raw = String(s||"").trim();
       if (!raw) return out;
-
-      // Accept "Mon, Wed, Fri" / "Mon/Wed/Fri" / "Mon Wed Fri"
       const parts = raw.split(/[^A-Za-z]+/).filter(Boolean);
       for (const p of parts){
         const idx = weekdayIndexFromName(p);
@@ -191,7 +179,6 @@
       return out;
     }
 
-    // basic CSV parser (handles quoted commas)
     function parseCSV(text){
       const rows = [];
       let cur = [];
@@ -204,7 +191,6 @@
 
         if (ch === '"' && inQuotes && next === '"'){ val+='"'; i++; continue; }
         if (ch === '"'){ inQuotes = !inQuotes; continue; }
-
         if (ch === "," && !inQuotes){ cur.push(val); val=""; continue; }
 
         if ((ch === "\n" || ch === "\r") && !inQuotes){
@@ -219,29 +205,21 @@
 
         val += ch;
       }
+
       if (val.length || cur.length){
         cur.push(val);
         rows.push(cur.map(c => c.trim()));
       }
+
       return rows.filter(r => r.some(c => c !== ""));
     }
 
-    function updateButtons(){
-      const n = pending.size;
-      saveBtn.disabled = (n === 0);
-      discardBtn.disabled = (n === 0);
-      saveBtn.textContent = (n === 0) ? "Save changes" : `Save changes (${n})`;
+    function isISODate(s){
+      return /^\d{4}-\d{2}-\d{2}$/.test(String(s||"").trim());
     }
 
-    function buildDateCols(){
-      const start = new Date();
-      start.setHours(0,0,0,0);
-
-      dateCols = [];
-      for (let i=0;i<CONFIG.DAYS_AHEAD;i++){
-        const d = addDays(start, i);
-        dateCols.push({ date:d, iso:toISODate(d), weekday:d.getDay() });
-      }
+    function isWeekend(weekdayIndex){
+      return weekdayIndex === 0 || weekdayIndex === 6; // Sun=0, Sat=6
     }
 
     function routeRunsOn(route, weekdayIndex){
@@ -250,7 +228,6 @@
     }
 
     function getEffectiveStatus(dateISO, route){
-      // Priority: pending change > sheet override > available
       const k = key(dateISO, route);
       if (pending.has(k)) return pending.get(k).status;
       if (overrides.has(k)) return overrides.get(k);
@@ -260,11 +237,12 @@
     function applyCellStyle(td, dateISO, route){
       td.classList.remove("inactive","runAvailable","fullWeight","fullDrops","pendingOutline");
 
-      const runs = routeRunsOn(route, dateCols.find(c => c.iso === dateISO).weekday);
+      const col = dateCols.find(c => c.iso === dateISO);
+      const runs = col ? routeRunsOn(route, col.weekday) : false;
 
       if (!runs){
         td.classList.add("inactive");
-        td.textContent = ""; // keep clean
+        td.textContent = "";
         return;
       }
 
@@ -282,10 +260,71 @@
     }
 
     /******************************************************************
-     * Load schedule from routes.csv
-     * Supports two styles:
-     *  A) Route, Mon, Tue, Wed... columns
-     *  B) Route, DeliveryDays column
+     * Load bank_holidays.csv -> bankHolidays Set(YYYY-MM-DD)
+     ******************************************************************/
+    async function loadBankHolidays(){
+      bankHolidays.clear();
+
+      setStatus("Loading bank_holidays.csv...");
+      const res = await fetch(CONFIG.BANK_HOLIDAYS_CSV_URL, { cache:"no-store" });
+
+      if (!res.ok){
+        setStatus("bank_holidays.csv not found (continuing without exclusions).");
+        return;
+      }
+
+      const text = await res.text();
+      const rows = parseCSV(text);
+      if (rows.length === 0) return;
+
+      let startRow = 0;
+      let dateIdx = 0;
+
+      const maybeHeaders = rows[0].map(normaliseHeader);
+      const idx = maybeHeaders.findIndex(h => h === "date" || h === "bankholiday" || h === "bank holiday" || h === "bank_holiday");
+      if (idx !== -1){
+        startRow = 1;
+        dateIdx = idx;
+      }
+
+      for (let r = startRow; r < rows.length; r++){
+        const d = String(rows[r][dateIdx] || "").trim();
+        if (isISODate(d)) bankHolidays.add(d);
+      }
+
+      setStatus(`Loaded ${bankHolidays.size} bank holiday date(s).`);
+    }
+
+    /******************************************************************
+     * Build date columns for next N WORKING days:
+     * - skip weekends
+     * - skip bank holidays
+     ******************************************************************/
+    function buildDateCols(){
+      const start = new Date();
+      start.setHours(0,0,0,0);
+
+      dateCols = [];
+      let i = 0;
+
+      while (dateCols.length < CONFIG.DAYS_AHEAD && i < 730){
+        const d = addDays(start, i);
+        const iso = toISODate(d);
+        const wd = d.getDay();
+
+        if (!isWeekend(wd) && !bankHolidays.has(iso)){
+          dateCols.push({ date:d, iso, weekday:wd });
+        }
+
+        i++;
+      }
+    }
+
+    /******************************************************************
+     * Load schedule from routes.csv (with exclusions)
+     * Exclusions:
+     * - routes starting with 3PLCO
+     * - placeholder-only 5-char routes (e.g. TKC01)
      ******************************************************************/
     async function loadScheduleFromCSV(){
       setStatus("Loading routes.csv...");
@@ -316,6 +355,7 @@
 
       for (let r=1; r<rows.length; r++){
         const row = rows[r];
+
         const route = String(row[routeIdx] || "").trim();
         if (!route) continue;
 
@@ -324,7 +364,7 @@
 
         // Exclude placeholder-only 5-character route codes (e.g. "TKC01")
         if (route.length <= 5) continue;
-        
+
         let days = new Set();
 
         if (dayCols.size >= 5){
@@ -341,7 +381,7 @@
       }
 
       if (schedule.size === 0){
-        throw new Error("No route schedules inferred from routes.csv. Ensure it has Mon/Tue/... columns or DeliveryDays.");
+        throw new Error("No route schedules inferred from routes.csv (after exclusions).");
       }
 
       setStatus(`Loaded ${schedule.size} routes from routes.csv.`);
@@ -360,7 +400,6 @@
       const data = await res.json().catch(()=>null);
       if (!data || !data.ok) throw new Error(`API failed: ${(data && data.error) ? data.error : "Unknown error"}`);
 
-      // Latest wins if duplicates exist (we just overwrite)
       for (const row of (data.rows || [])){
         const date = String(row.date || "").trim();
         const route = String(row.route || "").trim();
@@ -381,7 +420,6 @@
 
       const routes = Array.from(schedule.keys()).sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
 
-      // Header
       const thead = document.createElement("thead");
       const hr = document.createElement("tr");
 
@@ -398,7 +436,6 @@
       thead.appendChild(hr);
       gridEl.appendChild(thead);
 
-      // Body
       const tbody = document.createElement("tbody");
 
       for (const route of routes){
@@ -411,14 +448,12 @@
 
         for (const c of dateCols){
           const td = document.createElement("td");
-
           const runs = routeRunsOn(route, c.weekday);
 
           if (!runs){
             td.className = "inactive";
             td.textContent = "";
           } else {
-            // Dropdown only on run days
             const sel = document.createElement("select");
             sel.innerHTML = `
               <option value="${STATUS.AVAILABLE}">${STATUS.AVAILABLE}</option>
@@ -426,26 +461,20 @@
               <option value="${STATUS.FULL_DROPS}">${STATUS.FULL_DROPS}</option>
             `;
 
-            // initial value (sheet override or available)
             const k = key(c.iso, route);
             const initial = overrides.get(k) || STATUS.AVAILABLE;
             sel.value = initial;
 
             sel.addEventListener("change", () => {
               const chosen = sel.value;
-
-              // Record pending change (even if chosen matches current override, we still allow;
-              // users can "set" then Save to enforce, or discard it)
               pending.set(k, { date: c.iso, route, status: chosen });
               updateButtons();
-
               applyCellStyle(td, c.iso, route);
               setStatus(`Pending: ${route} on ${c.iso} -> ${chosen}`);
             });
 
             td.appendChild(sel);
             applyCellStyle(td, c.iso, route);
-
             cellByKey.set(k, td);
           }
 
@@ -459,7 +488,7 @@
     }
 
     /******************************************************************
-     * Discard pending changes (revert UI to sheet state)
+     * Discard pending changes
      ******************************************************************/
     function discardPending(){
       pending.clear();
@@ -477,9 +506,7 @@
 
     /******************************************************************
      * Save pending changes in one batch
-     *
-     * IMPORTANT: to avoid Apps Script CORS preflight issues,
-     * we send Content-Type: text/plain with a JSON string body.
+     * Uses text/plain to avoid Apps Script CORS preflight issues.
      ******************************************************************/
     async function savePending(){
       if (pending.size === 0) return;
@@ -489,11 +516,7 @@
 
       setStatus(`Saving ${changes.length} change(s)...`);
 
-      const payload = JSON.stringify({
-        action: "batch",
-        token,
-        changes
-      });
+      const payload = JSON.stringify({ action: "batch", token, changes });
 
       const res = await fetch(CONFIG.API_URL, {
         method: "POST",
@@ -508,7 +531,6 @@
         return;
       }
 
-      // After save: reload overrides fresh, then rebuild styles
       pending.clear();
       updateButtons();
 
@@ -525,7 +547,7 @@
     }
 
     /******************************************************************
-     * Full reload (routes.csv + overrides + rebuild)
+     * Full reload
      ******************************************************************/
     async function fullReload(){
       try{
@@ -533,11 +555,13 @@
         pending.clear();
         updateButtons();
 
+        await loadBankHolidays();
         buildDateCols();
+
         await loadScheduleFromCSV();
         await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
-        buildGrid();
 
+        buildGrid();
         setStatus("Loaded.");
       }catch(err){
         setStatus(`Error: ${String(err.message || err)}`);
@@ -545,9 +569,6 @@
       }
     }
 
-    /******************************************************************
-     * Warn user if they try to close with pending changes
-     ******************************************************************/
     window.addEventListener("beforeunload", (e) => {
       if (pending.size > 0){
         e.preventDefault();
@@ -555,16 +576,11 @@
       }
     });
 
-    /******************************************************************
-     * Wire buttons
-     ******************************************************************/
     reloadBtn.addEventListener("click", fullReload);
     discardBtn.addEventListener("click", discardPending);
     saveBtn.addEventListener("click", savePending);
 
-    // Initial load
     fullReload();
   </script>
 </body>
 </html>
-
