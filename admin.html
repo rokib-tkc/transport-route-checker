@@ -272,7 +272,7 @@
       border-radius: 10px;
       background: #fafafa;
       padding: 10px;
-      overflow: visible; /* keep visible for sticky reliability */
+      overflow: visible;
     }
 
     table{
@@ -280,7 +280,6 @@
       border-collapse: collapse;
       table-layout: fixed;
       min-width: 0;
-
       background: #fff;
       border: 1px solid #ddd;
       border-radius: 8px;
@@ -319,7 +318,6 @@
       line-height: 1.15;
     }
 
-    /* Route column (sticky) */
     th.routeHead, td.routeCell{
       width: 230px;
     }
@@ -426,19 +424,63 @@
     }
 
     /* ---------- TOOLTIP LAYER FIX ---------- */
-    tbody{
-      position: relative;
-      z-index: 1;
+    tbody{ position: relative; z-index: 1; }
+    tbody tr:hover{ position: relative; z-index: 50; }
+    td.routeCell:hover{ z-index: 200; }
+    .routeName:hover{ z-index: 300; }
+
+    /* ---------- ROUTE FILTER (top-left header) ---------- */
+    .routeFilterWrap{
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: flex-start;
+      justify-content: center;
     }
-    tbody tr:hover{
-      position: relative;
-      z-index: 50;
+    .routeFilterTop{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      width:100%;
     }
-    td.routeCell:hover{
-      z-index: 200;
+    .routeFilterLabel{
+      font-weight: 800;
+      font-size: var(--channelTitleSize);
+      line-height: 1.1;
+      white-space: nowrap;
     }
-    .routeName:hover{
-      z-index: 300;
+    .routeFilterSelect{
+      flex: 1;
+      min-width: 0;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid #cfcfcf;
+      background: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      color: #111;
+      appearance: auto;
+      text-align: left;
+      text-align-last: left;
+    }
+    .routeFilterSelect:focus{
+      outline: 2px solid #00000015;
+      outline-offset: 2px;
+    }
+    .routeFilterClear{
+      font-size: 13px;
+      font-weight: 800;
+      color: #0078d4;
+      text-decoration: underline;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .routeFilterClear:hover{ color:#005ea3; }
+    .routeFilterHint{
+      font-size: 12px;
+      font-weight: 600;
+      color: #444;
     }
 
     /* ---------- HIDE/SHOW ---------- */
@@ -451,6 +493,7 @@
       th.routeHead, td.routeCell{width: 210px}
       .routeTooltip{min-width: 240px; max-width: 360px;}
       thead th, th.routeHead, td.routeCell{ font-size: 14px; }
+      .routeFilterLabel{ font-size: 14px; }
     }
 
     @media (max-width: 600px){
@@ -567,6 +610,11 @@
 
     // Tooltip data built per session from routes.csv "prefix" column:
     const routePostcodeGroups = new Map();
+
+    // Route filter state
+    let currentRouteFilter = ""; // route string, or "" for all
+    let routeFilterSelectEl = null;
+    let routeFilterClearEl = null;
 
     const gateEl = document.getElementById("gate");
     const appEl = document.getElementById("app");
@@ -933,6 +981,37 @@
       }
     }
 
+    // ---------- Route filter apply ----------
+    function applyRouteFilter(){
+      const tbody = gridEl.querySelector("tbody");
+      if (!tbody) return;
+
+      const filter = String(currentRouteFilter || "").trim();
+      const rows = tbody.querySelectorAll("tr");
+
+      rows.forEach(tr => {
+        const r = tr.dataset.route || "";
+        tr.style.display = (!filter || r === filter) ? "" : "none";
+      });
+
+      if (routeFilterClearEl){
+        routeFilterClearEl.classList.toggle("hidden", !filter);
+      }
+    }
+
+    function setRouteFilter(route){
+      currentRouteFilter = String(route || "").trim();
+      if (routeFilterSelectEl){
+        routeFilterSelectEl.value = currentRouteFilter;
+      }
+      applyRouteFilter();
+      if (currentRouteFilter){
+        setStatus(`Filtered to: ${currentRouteFilter}`);
+      } else {
+        setStatus("Filter cleared.");
+      }
+    }
+
     // ---------- Build grid ----------
     function buildGrid(){
       gridEl.innerHTML = "";
@@ -944,10 +1023,54 @@
       const thead = document.createElement("thead");
       const hr = document.createElement("tr");
 
+      // Top-left header becomes a filter control
       const thRoute = document.createElement("th");
-      thRoute.textContent = "Route";
       thRoute.className = "routeHead";
+
+      const filterWrap = document.createElement("div");
+      filterWrap.className = "routeFilterWrap";
+
+      const topRow = document.createElement("div");
+      topRow.className = "routeFilterTop";
+
+      const label = document.createElement("div");
+      label.className = "routeFilterLabel";
+      label.textContent = "Route";
+
+      const sel = document.createElement("select");
+      sel.className = "routeFilterSelect";
+      sel.setAttribute("aria-label", "Filter route");
+      sel.innerHTML = `<option value="">All routes</option>` + routes.map(r => `<option value="${escapeHTMLAttr(r)}">${escapeHTML(r)}</option>`).join("");
+
+      const clear = document.createElement("span");
+      clear.className = "routeFilterClear hidden";
+      clear.textContent = "Clear";
+      clear.title = "Clear route filter";
+
+      topRow.appendChild(label);
+      topRow.appendChild(sel);
+      topRow.appendChild(clear);
+
+      const hint = document.createElement("div");
+      hint.className = "routeFilterHint";
+      hint.textContent = "Filter to a single route";
+
+      filterWrap.appendChild(topRow);
+      filterWrap.appendChild(hint);
+      thRoute.appendChild(filterWrap);
       hr.appendChild(thRoute);
+
+      // Wire up references for later
+      routeFilterSelectEl = sel;
+      routeFilterClearEl = clear;
+
+      sel.addEventListener("change", () => {
+        setRouteFilter(sel.value);
+      });
+
+      clear.addEventListener("click", () => {
+        setRouteFilter("");
+      });
 
       for (const c of dateCols){
         const th = document.createElement("th");
@@ -962,6 +1085,7 @@
 
       for (const route of routes){
         const tr = document.createElement("tr");
+        tr.dataset.route = route;
 
         const tdRoute = document.createElement("td");
         tdRoute.className = "routeCell";
@@ -1026,6 +1150,15 @@
       }
 
       gridEl.appendChild(tbody);
+
+      // Re-apply filter after rebuild (e.g. reload)
+      if (currentRouteFilter && !routes.includes(currentRouteFilter)){
+        currentRouteFilter = "";
+      }
+      if (routeFilterSelectEl){
+        routeFilterSelectEl.value = currentRouteFilter;
+      }
+      applyRouteFilter();
     }
 
     function discardPending(){
@@ -1097,7 +1230,6 @@
         setStatus("Loaded.");
 
         // Archive date selector: only allow dates BEFORE the live window
-        // Min: arbitrary (empty) -> browser allows earlier; Max: day before the earliest live date.
         const earliestLive = dateCols.length ? dateCols[0].iso : "";
         if (earliestLive){
           const d = new Date(earliestLive + "T00:00:00");
@@ -1142,23 +1274,19 @@
     }
 
     // ---------- ARCHIVE ----------
-
     function openArchive(){
-      // Ensure live pending warns? Archive is view-only, we allow open regardless.
       archiveOverlayEl.classList.remove("hidden");
-      document.body.style.overflow = "hidden"; // prevent background scroll
+      document.body.style.overflow = "hidden";
 
       archiveMsgEl.textContent = "";
       archiveHeadingEl.classList.add("hidden");
       archiveWrapEl.classList.add("hidden");
       archiveTableEl.innerHTML = "";
 
-      // Default date: yesterday (if valid under max)
       const max = archiveDateEl.max || "";
       if (max){
         archiveDateEl.value = max;
       } else {
-        // fallback: yesterday
         const d = new Date();
         d.setDate(d.getDate()-1);
         archiveDateEl.value = toISODate(d);
@@ -1169,7 +1297,7 @@
 
     function closeArchive(){
       archiveOverlayEl.classList.add("hidden");
-      document.body.style.overflow = ""; // restore scroll
+      document.body.style.overflow = "";
     }
 
     function statusPillHTML(status){
@@ -1189,7 +1317,6 @@
         return;
       }
 
-      // Enforce "past only (not currently in view)"
       const earliestLive = dateCols.length ? dateCols[0].iso : null;
       if (earliestLive && dateISO >= earliestLive){
         archiveMsgEl.textContent = "Please select a date that is not in the current Live view.";
@@ -1218,7 +1345,6 @@
         archiveHeadingEl.textContent = `Route closures for ${display}`;
         archiveHeadingEl.classList.remove("hidden");
 
-        // Build table
         let html = `
           <thead>
             <tr>
@@ -1266,6 +1392,9 @@
         .replaceAll('"',"&quot;")
         .replaceAll("'","&#039;");
     }
+    function escapeHTMLAttr(s){
+      return escapeHTML(String(s ?? "")).replaceAll("\n"," ").replaceAll("\r"," ");
+    }
 
     // ---------- EVENTS ----------
     proceedBtn.addEventListener("click", proceed);
@@ -1292,7 +1421,6 @@
     });
 
     archiveOverlayEl.addEventListener("click", (e) => {
-      // Click outside panel closes
       if (e.target === archiveOverlayEl) closeArchive();
     });
 
