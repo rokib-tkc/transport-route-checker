@@ -100,6 +100,7 @@
       margin-top: 5px;
       font-size: 13px;
       table-layout: fixed;
+      background: #fff;
     }
 
     th, td {
@@ -127,10 +128,77 @@
       display: none;
     }
 
+    /* ============================================================
+       ROUTE STATUS STRIP (View-only) — matches Admin colours
+       ============================================================ */
+    :root{
+      --border:#cfcfcf;
+      --header:#f0f0f0;
+      --inactive:#f7f7f7;
+
+      --green:#00b050;
+      --red:#ff0000;
+      --orange:#ffc000;
+    }
+
+    .status-strip{
+      margin-top: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .status-strip table{
+      margin-top: 0;
+      border: 0;
+      font-size: 13px;
+    }
+
+    .status-strip th,
+    .status-strip td{
+      border: 1px solid #ddd;
+      padding: 8px 6px;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+
+    .status-strip thead th{
+      background: var(--header);
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .status-strip .statusCell{
+      font-weight: 700;
+      font-size: 12.5px;
+    }
+
+    .inactiveCell{ background: var(--inactive); color:#222; }
+    .availableCell{ background: var(--green); color:#111; }
+    .fullWeightCell{ background: var(--red); color:#fff; }
+    .fullDropsCell{ background: var(--orange); color:#111; }
+
+    .status-note{
+      margin-top: 6px;
+      font-size: 12px;
+      color: #555;
+      line-height: 1.35;
+    }
+
     @media (max-width: 600px) {
       .search-section { flex-direction: column; align-items: flex-start; }
       .search-input-wrapper { width: 100%; }
       button { width: 100%; }
+
+      .status-strip th,
+      .status-strip td{
+        padding: 7px 4px;
+        font-size: 12px;
+      }
+      .status-strip .statusCell{ font-size: 12px; }
     }
   </style>
 </head>
@@ -197,6 +265,21 @@
   <div id="channelTooltip"></div>
 
   <script>
+    // ============================================================
+    // CONFIG (Route Status API)
+    // ============================================================
+    const CONFIG = {
+      API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
+      DAYS_AHEAD: 10
+    };
+
+    const STATUS = {
+      AVAILABLE: "Available",
+      FULL_WEIGHT: "Full - On Weight",
+      FULL_DROPS: "Full - On Drops",
+      CLOSED: "Closed"
+    };
+
     // ============================================================
     // DELIMITER-DETECTING PARSER (comma CSV or tab TSV)
     // ============================================================
@@ -376,6 +459,17 @@
       return dateObj.toLocaleDateString("en-GB", { weekday: "long" });
     }
 
+    function weekdayShort(dateObj){
+      return dateObj.toLocaleDateString("en-GB", { weekday: "short" });
+    }
+
+    function displayDateShort(dateObj){
+      const dd = String(dateObj.getDate()).padStart(2, "0");
+      const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+      const yy = String(dateObj.getFullYear()).slice(-2);
+      return `${dd}/${mm}/${yy}`;
+    }
+
     function formatDayDate(dateObj) {
       const day = weekdayName(dateObj);
       const dateStr = dateObj.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
@@ -392,6 +486,28 @@
       if (afterCutoff) start = nextWorkingDay(start);
 
       return start;
+    }
+
+    // Build next N WORKING DAYS (exclude weekends + bank holidays) — like Admin
+    function buildNextWorkingDateCols(n){
+      const cols = [];
+      const start = startOfDay(new Date());
+      let i = 0;
+
+      while (cols.length < n && i < 730){
+        const d = new Date(start);
+        d.setDate(d.getDate() + i);
+        if (isWorkingDay(d)){
+          cols.push({
+            date: d,
+            iso: toISODateKey(d),
+            weekday: d.getDay(),
+            head: `${weekdayShort(d)}<br>${displayDateShort(d)}`
+          });
+        }
+        i++;
+      }
+      return cols;
     }
 
     // Carrier next dates
@@ -428,12 +544,120 @@
       for (let i = 0; i < 120; i++) {
         const dayLower = weekdayName(d).toLowerCase();
 
-        // IMPORTANT: delivery date itself must be a working day (skips bank holidays)
+        // delivery date itself must be a working day (skips bank holidays)
         if (allowed.has(dayLower) && d >= earliest && isWorkingDay(d)) return d;
 
         d.setDate(d.getDate() + 1);
       }
       return null;
+    }
+
+    // ============================================================
+    // ROUTE STATUS OVERRIDES (Google Sheet via Apps Script)
+    // ============================================================
+
+    // key: "YYYY-MM-DD||ROUTE" -> status string
+    const overridesMap = new Map();
+
+    function ovKey(dateISO, route){
+      return `${dateISO}||${route}`;
+    }
+
+    async function loadOverridesForRange(fromISO, toISO){
+      overridesMap.clear();
+      const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`;
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json().catch(()=>null);
+      if (!data || !data.ok) throw new Error(`API failed: ${(data && data.error) ? data.error : "Unknown error"}`);
+
+      for (const row of (data.rows || [])){
+        const date = String(row.date || "").trim();
+        const route = String(row.route || "").trim();
+        const status = String(row.status || "").trim();
+        if (!date || !route || !status) continue;
+        overridesMap.set(ovKey(date, route), status);
+      }
+    }
+
+    // ============================================================
+    // STATUS STRIP LOGIC (View-only, channel rule wins)
+    // ============================================================
+
+    function earliestBookableDeliveryDate(leadDays){
+      // Same logic as route checker: booking after 2pm pushes "order start" forward,
+      // then lead time (working days) applies from that start.
+      const start = getStartDateConsideringCutoff();
+      return (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
+    }
+
+    function routeRunsOnDayName(runDays, dateObj){
+      // runDays: Set of lowercase long day names e.g. "monday"
+      const d = weekdayName(dateObj).toLowerCase();
+      return runDays.has(d);
+    }
+
+    function classifyStatusCell({ runs, isClosed, overrideStatus }){
+      if (!runs){
+        return { cls: "inactiveCell statusCell", text: "" };
+      }
+
+      if (isClosed){
+        // Closed uses same red as Full - On Weight (per requirement)
+        return { cls: "fullWeightCell statusCell", text: STATUS.CLOSED };
+      }
+
+      // If override exists, display it (unless closed rule applied above)
+      if (overrideStatus === STATUS.FULL_WEIGHT){
+        return { cls: "fullWeightCell statusCell", text: STATUS.FULL_WEIGHT };
+      }
+      if (overrideStatus === STATUS.FULL_DROPS){
+        return { cls: "fullDropsCell statusCell", text: STATUS.FULL_DROPS };
+      }
+      if (overrideStatus === STATUS.AVAILABLE){
+        return { cls: "availableCell statusCell", text: STATUS.AVAILABLE };
+      }
+
+      // Default
+      return { cls: "availableCell statusCell", text: STATUS.AVAILABLE };
+    }
+
+    function buildStatusStripHTML(route, runDaysArray, leadTimeText, dateCols){
+      const leadDays = parseLeadTimeWorkingDays(leadTimeText);
+      const earliest = earliestBookableDeliveryDate(leadDays); // Date object (start of day)
+
+      const runDays = new Set((runDaysArray || []).map(d => String(d).trim().toLowerCase()).filter(Boolean));
+
+      let thead = "<thead><tr>";
+      for (const c of dateCols){
+        thead += `<th>${c.head}</th>`;
+      }
+      thead += "</tr></thead>";
+
+      let tbody = "<tbody><tr>";
+      for (const c of dateCols){
+        const runs = routeRunsOnDayName(runDays, c.date);
+
+        // Closed if within channel lead-time window (channel rule wins always)
+        const isClosed = runs && (startOfDay(c.date) < startOfDay(earliest));
+
+        const ov = overridesMap.get(ovKey(c.iso, route));
+        const { cls, text } = classifyStatusCell({ runs, isClosed, overrideStatus: ov });
+
+        tbody += `<td class="${cls}">${text}</td>`;
+      }
+      tbody += "</tr></tbody>";
+
+      return `
+        <div class="status-strip" aria-label="Route status (next ${dateCols.length} working days)">
+          <table>
+            ${thead}
+            ${tbody}
+          </table>
+        </div>
+        <div class="status-note">
+          Shows the next ${dateCols.length} working days (excluding UK bank holidays). Status is <b>Closed</b> if inside the channel lead-time / cut-off window.
+        </div>
+      `;
     }
 
     // ============================================================
@@ -467,7 +691,7 @@
       });
     }
 
-    function buildResultsHTML(rows, usedPrefix, originalInput) {
+    function buildResultsHTML(rows, usedPrefix, originalInput, dateCols) {
       const grouped = groupByChannel(rows);
       const channels = Object.keys(grouped).sort();
 
@@ -492,6 +716,7 @@
       channels.forEach(channel => {
         const rowsForChannel = grouped[channel];
 
+        // per your rule: only one route per channel
         const route = rowsForChannel[0].route;
         const serviceType = rowsForChannel[0].serviceType;
         const leadTime = rowsForChannel[0].leadTime;
@@ -501,6 +726,8 @@
         const nextDate = findNextDeliveryDate(allDays, leadTime);
         const nextDeliveryText = nextDate ? formatDayDate(nextDate) : "";
 
+        const statusStripHTML = buildStatusStripHTML(route, allDays, leadTime, dateCols);
+
         html += `
           <div class="channel-block">
             <div class="channel-header">
@@ -509,6 +736,7 @@
                 Hover here for channel rules
               </div>
             </div>
+
             <table>
               <colgroup>
                 <col style="width: 24%">
@@ -536,6 +764,8 @@
                 </tr>
               </tbody>
             </table>
+
+            ${statusStripHTML}
           </div>
         `;
       });
@@ -619,34 +849,46 @@
       const cleaned = normaliseInputPostcode(input);
       const url = "routes.csv?cb=" + Date.now();
 
-      fetch(url)
-        .then(r => {
-          if (!r.ok) throw new Error("Failed to load routes.csv");
-          return r.text();
-        })
-        .then(text => {
-          const routingData = parseRoutes(text);
-          const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
+      try{
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to load routes.csv");
+        const text = await res.text();
 
-          if (!bestPrefix) {
-            // keep carrier visible if no match
-            showLandingCarrier();
-            document.getElementById("noResults").style.display = "block";
-            document.getElementById("noResults").textContent = "No routing information found for that postcode prefix.";
-            return;
-          }
+        const routingData = parseRoutes(text);
+        const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
 
-          // valid match: hide landing carrier and show results
-          hideLandingCarrier();
-
-          const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
-          buildResultsHTML(matchingRows, bestPrefix, input);
-        })
-        .catch(err => {
-          console.error("Error loading routes.csv:", err);
+        if (!bestPrefix) {
+          // keep carrier visible if no match
           showLandingCarrier();
-          alert("Routing data is not available at the moment. Please try again in a moment or contact the system owner.");
-        });
+          document.getElementById("noResults").style.display = "block";
+          document.getElementById("noResults").textContent = "No routing information found for that postcode prefix.";
+          return;
+        }
+
+        // valid match: hide landing carrier and show results
+        hideLandingCarrier();
+
+        // Build next 10 working days (excluding bank holidays)
+        const dateCols = buildNextWorkingDateCols(CONFIG.DAYS_AHEAD);
+
+        // Load overrides once for the full 10-day working window
+        if (dateCols.length){
+          try{
+            await loadOverridesForRange(dateCols[0].iso, dateCols[dateCols.length - 1].iso);
+          }catch(apiErr){
+            // Do not block UI if API is down — fall back to default schedule behaviour + Closed rule
+            console.warn("Route status API not available. Showing defaults:", apiErr);
+          }
+        }
+
+        const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
+        buildResultsHTML(matchingRows, bestPrefix, input, dateCols);
+
+      }catch(err){
+        console.error("Error during search:", err);
+        showLandingCarrier();
+        alert("Routing data is not available at the moment. Please try again in a moment or contact the system owner.");
+      }
     }
 
     document.getElementById("searchButton").onclick = performSearch;
@@ -683,5 +925,3 @@
   </script>
 </body>
 </html>
-
-
