@@ -938,14 +938,14 @@
 
       proceedBtn.disabled = true;
       gateMsgEl.textContent = "Checking access code...";
-      setStatus("Checking token...");
+      setStatus("Please wait...");
 
       const ok = await validateToken(token);
 
       if (!ok){
         proceedBtn.disabled = false;
         gateMsgEl.textContent = "Access code incorrect. Please try again.";
-        setStatus("Token incorrect.");
+        setStatus("Invalid access code.");
         gateTokenEl.focus();
         return;
       }
@@ -977,6 +977,7 @@
   </script>
 </body>
 </html>
+
 
 
 
