@@ -591,7 +591,11 @@
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
       ROUTES_CSV_URL: "./routes.csv",
       BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
-      DAYS_AHEAD: 10
+      DAYS_AHEAD: 10,
+
+      // Only use this channel's rows to infer route schedules / postcode groups.
+      // Assumption: schedules are identical across (Component / Jigsaw / etc.)
+      COMPONENT_CHANNEL_NAME: "Component Channel"
     };
 
     const STATUS = {
@@ -691,28 +695,28 @@
     }
 
     function stripBom(s) {
-  return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
-}
+      return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+    }
 
-function detectDelimiterFromText(text){
-  const cleaned = stripBom(String(text || ""));
-  const firstLine = cleaned.split(/\r?\n/).find(l => l.trim() !== "") || "";
-  return firstLine.includes("\t") ? "\t" : ",";
-}
+    function detectDelimiterFromText(text){
+      const cleaned = stripBom(String(text || ""));
+      const firstLine = cleaned.split(/\r?\n/).find(l => l.trim() !== "") || "";
+      return firstLine.includes("\t") ? "\t" : ",";
+    }
 
-// TSV parser (simple) – assumes no quoted tabs (your files don’t use quoted TSV)
-function parseTSV(text){
-  const cleaned = stripBom(String(text || ""));
-  const lines = cleaned.split(/\r?\n/).filter(l => l.trim() !== "");
-  return lines.map(line => line.split("\t").map(c => String(c || "").trim()));
-}
+    // TSV parser (simple) – assumes no quoted tabs (your files don’t use quoted TSV)
+    function parseTSV(text){
+      const cleaned = stripBom(String(text || ""));
+      const lines = cleaned.split(/\r?\n/).filter(l => l.trim() !== "");
+      return lines.map(line => line.split("\t").map(c => String(c || "").trim()));
+    }
 
-// Unified: if TSV -> parseTSV, else -> existing parseCSV (quoted CSV supported)
-function parseDelimitedSmart(text){
-  const delim = detectDelimiterFromText(text);
-  if (delim === "\t") return parseTSV(text);
-  return parseCSV(text); // your existing quoted CSV parser
-}
+    // Unified: if TSV -> parseTSV, else -> existing parseCSV (quoted CSV supported)
+    function parseDelimitedSmart(text){
+      const delim = detectDelimiterFromText(text);
+      if (delim === "\t") return parseTSV(text);
+      return parseCSV(text); // your existing quoted CSV parser
+    }
 
     function parseCSV(text){
       const rows = [];
@@ -920,6 +924,7 @@ function parseDelimitedSmart(text){
     }
 
     // ---------- Load schedule & build tooltip groups from routes.csv ----------
+    // CHANGE: Only infer schedules/tooltip groups from Component Channel rows
     async function loadScheduleFromCSV(){
       const res = await fetch(CONFIG.ROUTES_CSV_URL + "?cb=" + Date.now(), { cache:"no-store" });
       if (!res.ok) throw new Error(`Failed to load routes.csv (${res.status})`);
@@ -938,6 +943,9 @@ function parseDelimitedSmart(text){
       const prefixIdx = headers.findIndex(h => h === "prefix");
       if (prefixIdx === -1) throw new Error("routes.csv must include a 'prefix' column (postcode prefix/district).");
 
+      const channelIdx = headers.findIndex(h => h === "channel" || h === "routechannel");
+      if (channelIdx === -1) throw new Error("routes.csv must include a 'channel' column.");
+
       const dayCols = new Map();
       headers.forEach((h,i)=>{
         const idx = weekdayIndexFromName(h);
@@ -952,9 +960,13 @@ function parseDelimitedSmart(text){
       routePostcodeGroups.clear();
 
       const routeDistricts = new Map();
+      const targetChannel = String(CONFIG.COMPONENT_CHANNEL_NAME || "").trim().toLowerCase();
 
       for (let r=1; r<rows.length; r++){
         const row = rows[r];
+
+        const channel = String(row[channelIdx] || "").trim().toLowerCase();
+        if (targetChannel && channel !== targetChannel) continue;
 
         const route = String(row[routeIdx] || "").trim();
         if (!route) continue;
@@ -980,7 +992,11 @@ function parseDelimitedSmart(text){
         routeDistricts.get(route).push(...extractDistrictsFromPrefixCell(prefixCell));
       }
 
-      if (schedule.size === 0) throw new Error("No route schedules inferred from routes.csv (after exclusions).");
+      if (schedule.size === 0){
+        throw new Error(
+          `No route schedules inferred from routes.csv for channel "${CONFIG.COMPONENT_CHANNEL_NAME}".`
+        );
+      }
 
       for (const [route, districts] of routeDistricts.entries()){
         const grouped = groupDistrictsToRanges(districts);
@@ -1463,6 +1479,3 @@ function parseDelimitedSmart(text){
   </script>
 </body>
 </html>
-
-
-
