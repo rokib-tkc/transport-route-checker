@@ -502,25 +502,26 @@
 
     // Build next N WORKING DAYS (exclude weekends + bank holidays) — like Admin
     function buildNextWorkingDateCols(n){
-      const cols = [];
-      const start = startOfDay(new Date());
-      let i = 0;
+  const cols = [];
+  const start = startOfDay(getStartDateConsideringCutoff()); // <-- key change
+  let i = 0;
 
-      while (cols.length < n && i < 730){
-        const d = new Date(start);
-        d.setDate(d.getDate() + i);
-        if (isWorkingDay(d)){
-          cols.push({
-            date: d,
-            iso: toISODateKey(d),
-            weekday: d.getDay(),
-            head: `${weekdayShort(d)}<br>${displayDateShort(d)}`
-          });
-        }
-        i++;
-      }
-      return cols;
+  while (cols.length < n && i < 730){
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+
+    if (isWorkingDay(d)){
+      cols.push({
+        date: d,
+        iso: toISODateKey(d),
+        weekday: d.getDay(),
+        head: `${weekdayShort(d)}<br>${displayDateShort(d)}`
+      });
     }
+    i++;
+  }
+  return cols;
+}
 
     // Carrier next dates
     function computeCarrierNextDates() {
@@ -937,4 +938,5 @@
   </script>
 </body>
 </html>
+
 
