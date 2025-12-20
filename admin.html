@@ -921,7 +921,7 @@ function parseDelimitedSmart(text){
 
     // ---------- Load schedule & build tooltip groups from routes.csv ----------
     async function loadScheduleFromCSV(){
-      const res = await fetch(CONFIG.ROUTES_CSV_URL, { cache:"no-store" });
+      const res = await fetch(CONFIG.ROUTES_CSV_URL + "?cb=" + Date.now(), { cache:"no-store" });
       if (!res.ok) throw new Error(`Failed to load routes.csv (${res.status})`);
 
       const text = await res.text();
@@ -1463,5 +1463,6 @@ function parseDelimitedSmart(text){
   </script>
 </body>
 </html>
+
 
 
