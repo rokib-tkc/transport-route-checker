@@ -18,6 +18,7 @@
       padding: 20px;
       border-radius: 10px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      position: relative;
     }
 
     .search-section {
@@ -188,6 +189,52 @@
       line-height: 1.35;
     }
 
+    /* ============================================================
+       LOADING OVERLAY (smooth UX during fetch)
+       ============================================================ */
+    .loading-overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      padding: 20px;
+    }
+    .loading-panel{
+      width: 100%;
+      max-width: 360px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+      padding: 16px 18px;
+      text-align: center;
+    }
+    .spinner{
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 5px solid #d9d9d9;
+      border-top-color: #0078d4;
+      margin: 0 auto 12px;
+      animation: spin 0.85s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-title{
+      font-size: 14px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      color: #111;
+    }
+    .loading-sub{
+      font-size: 12.5px;
+      margin: 0;
+      color: #444;
+      line-height: 1.35;
+    }
+
     @media (max-width: 600px) {
       .search-section { flex-direction: column; align-items: flex-start; }
       .search-input-wrapper { width: 100%; }
@@ -204,6 +251,15 @@
 </head>
 
 <body>
+  <!-- LOADING OVERLAY -->
+  <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true">
+    <div class="loading-panel">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="loading-title" id="loadingTitle">Loading…</p>
+      <p class="loading-sub" id="loadingSub">Fetching routes and live status.</p>
+    </div>
+  </div>
+
   <div class="container">
     <h1>Transport Route Checker</h1>
 
@@ -279,6 +335,34 @@
       FULL_DROPS: "Full - On Drops",
       CLOSED: "Closed"
     };
+
+    // ============================================================
+    // LOADING UI HELPERS (no logic change, just UX)
+    // ============================================================
+    function setLoading(isLoading, title, sub){
+      const overlay = document.getElementById("loadingOverlay");
+      const t = document.getElementById("loadingTitle");
+      const s = document.getElementById("loadingSub");
+      const btn = document.getElementById("searchButton");
+      const input = document.getElementById("postcodeInput");
+
+      if (title) t.textContent = title;
+      if (sub) s.textContent = sub;
+
+      overlay.style.display = isLoading ? "flex" : "none";
+
+      // Prevent double-search spamming while we fetch
+      btn.disabled = isLoading;
+      input.disabled = isLoading;
+    }
+
+    function clearResultsForLoading(){
+      // Hide everything except the spinner while loading search results
+      document.getElementById("carrierBlock").style.display = "none";
+      document.getElementById("resultsMeta").style.display = "none";
+      document.getElementById("resultsContainer").innerHTML = "";
+      document.getElementById("noResults").style.display = "none";
+    }
 
     // ============================================================
     // DELIMITER-DETECTING PARSER (comma CSV or tab TSV)
@@ -477,51 +561,50 @@
     }
 
     function getStartDateConsideringCutoff() {
-  const now = new Date();
-  const cutoffHour = 14; // 2pm
+      const now = new Date();
+      const cutoffHour = 14; // 2pm
 
-  // Start from "today" (date only)
-  let start = startOfDay(now);
+      // Start from "today" (date only)
+      let start = startOfDay(now);
 
-  // If today is NOT a working day (weekend/bank hol), ignore the clock completely.
-  // Booking day becomes the next working day.
-  if (!isWorkingDay(start)) {
-    return nextWorkingDay(start);
-  }
+      // If today is NOT a working day (weekend/bank hol), ignore the clock completely.
+      // Booking day becomes the next working day.
+      if (!isWorkingDay(start)) {
+        return nextWorkingDay(start);
+      }
 
-  // Only apply the 2pm rule on a working day
-  const afterCutoff =
-    (now.getHours() > cutoffHour) ||
-    (now.getHours() === cutoffHour && now.getMinutes() > 0);
+      // Only apply the 2pm rule on a working day
+      const afterCutoff =
+        (now.getHours() > cutoffHour) ||
+        (now.getHours() === cutoffHour && now.getMinutes() > 0);
 
-  if (afterCutoff) start = nextWorkingDay(start);
+      if (afterCutoff) start = nextWorkingDay(start);
 
-  return start;
-}
-
-
-    // Build next N WORKING DAYS (exclude weekends + bank holidays) — like Admin
-    function buildNextWorkingDateCols(n){
-  const cols = [];
-  const start = startOfDay(getStartDateConsideringCutoff()); // <-- key change
-  let i = 0;
-
-  while (cols.length < n && i < 730){
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-
-    if (isWorkingDay(d)){
-      cols.push({
-        date: d,
-        iso: toISODateKey(d),
-        weekday: d.getDay(),
-        head: `${weekdayShort(d)}<br>${displayDateShort(d)}`
-      });
+      return start;
     }
-    i++;
-  }
-  return cols;
-}
+
+    // Build next N WORKING DAYS (exclude weekends + bank holidays) — anchored to booking day
+    function buildNextWorkingDateCols(n){
+      const cols = [];
+      const start = startOfDay(getStartDateConsideringCutoff()); // anchor to booking day
+      let i = 0;
+
+      while (cols.length < n && i < 730){
+        const d = new Date(start);
+        d.setDate(d.getDate() + i);
+
+        if (isWorkingDay(d)){
+          cols.push({
+            date: d,
+            iso: toISODateKey(d),
+            weekday: d.getDay(),
+            head: `${weekdayShort(d)}<br>${displayDateShort(d)}`
+          });
+        }
+        i++;
+      }
+      return cols;
+    }
 
     // Carrier next dates
     function computeCarrierNextDates() {
@@ -597,14 +680,11 @@
     // ============================================================
 
     function earliestBookableDeliveryDate(leadDays){
-      // Same logic as route checker: booking after 2pm pushes "order start" forward,
-      // then lead time (working days) applies from that start.
       const start = getStartDateConsideringCutoff();
       return (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
     }
 
     function routeRunsOnDayName(runDays, dateObj){
-      // runDays: Set of lowercase long day names e.g. "monday"
       const d = weekdayName(dateObj).toLowerCase();
       return runDays.has(d);
     }
@@ -615,11 +695,9 @@
       }
 
       if (isClosed){
-        // Closed uses same red as Full - On Weight (per requirement)
         return { cls: "fullWeightCell statusCell", text: STATUS.CLOSED };
       }
 
-      // If override exists, display it (unless closed rule applied above)
       if (overrideStatus === STATUS.FULL_WEIGHT){
         return { cls: "fullWeightCell statusCell", text: STATUS.FULL_WEIGHT };
       }
@@ -630,13 +708,12 @@
         return { cls: "availableCell statusCell", text: STATUS.AVAILABLE };
       }
 
-      // Default
       return { cls: "availableCell statusCell", text: STATUS.AVAILABLE };
     }
 
     function buildStatusStripHTML(route, runDaysArray, leadTimeText, dateCols){
       const leadDays = parseLeadTimeWorkingDays(leadTimeText);
-      const earliest = earliestBookableDeliveryDate(leadDays); // Date object (start of day)
+      const earliest = earliestBookableDeliveryDate(leadDays);
 
       const runDays = new Set((runDaysArray || []).map(d => String(d).trim().toLowerCase()).filter(Boolean));
 
@@ -649,8 +726,6 @@
       let tbody = "<tbody><tr>";
       for (const c of dateCols){
         const runs = routeRunsOnDayName(runDays, c.date);
-
-        // Closed if within channel lead-time window (channel rule wins always)
         const isClosed = runs && (startOfDay(c.date) < startOfDay(earliest));
 
         const ov = overridesMap.get(ovKey(c.iso, route));
@@ -729,7 +804,6 @@
       channels.forEach(channel => {
         const rowsForChannel = grouped[channel];
 
-        // per your rule: only one route per channel
         const route = rowsForChannel[0].route;
         const serviceType = rowsForChannel[0].serviceType;
         const leadTime = rowsForChannel[0].leadTime;
@@ -849,6 +923,7 @@
 
     async function performSearch() {
       const input = document.getElementById("postcodeInput").value.trim();
+
       if (!input) {
         showLandingCarrier();
         document.getElementById("noResults").style.display = "block";
@@ -856,13 +931,17 @@
         return;
       }
 
-      // ensure bank holidays are loaded before calculating next-delivery dates
-      await bankHolidaysReady;
-
-      const cleaned = normaliseInputPostcode(input);
-      const url = "routes.csv?cb=" + Date.now();
+      // Make UX smooth: clear old results + show spinner immediately
+      clearResultsForLoading();
+      setLoading(true, "Loading route information…", "Fetching routes and live status.");
 
       try{
+        // ensure bank holidays are loaded before calculating next-delivery dates
+        await bankHolidaysReady;
+
+        const cleaned = normaliseInputPostcode(input);
+        const url = "routes.csv?cb=" + Date.now();
+
         const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to load routes.csv");
         const text = await res.text();
@@ -871,6 +950,8 @@
         const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
 
         if (!bestPrefix) {
+          setLoading(false);
+
           // keep carrier visible if no match
           showLandingCarrier();
           document.getElementById("noResults").style.display = "block";
@@ -887,9 +968,9 @@
         // Load overrides once for the full 10-day working window
         if (dateCols.length){
           try{
+            setLoading(true, "Loading live route status…", "Almost there.");
             await loadOverridesForRange(dateCols[0].iso, dateCols[dateCols.length - 1].iso);
           }catch(apiErr){
-            // Do not block UI if API is down — fall back to default schedule behaviour + Closed rule
             console.warn("Route status API not available. Showing defaults:", apiErr);
           }
         }
@@ -897,8 +978,12 @@
         const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
         buildResultsHTML(matchingRows, bestPrefix, input, dateCols);
 
+        // Smooth finish
+        setLoading(false);
+
       }catch(err){
         console.error("Error during search:", err);
+        setLoading(false);
         showLandingCarrier();
         alert("Routing data is not available at the moment. Please try again in a moment or contact the system owner.");
       }
@@ -938,5 +1023,3 @@
   </script>
 </body>
 </html>
-
-
