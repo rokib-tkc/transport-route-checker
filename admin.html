@@ -352,16 +352,16 @@
     <!-- TOKEN GATE -->
     <div id="gate" class="gateWrap">
       <div style="font-size:13px;color:#444;line-height:1.4;text-align:center">
-        Enter the admin code to access the route status editor.
+        Enter the access code to access the route status editor.
       </div>
 
       <div class="gateRow">
-        <input id="gateToken" type="password" placeholder="Admin code" autocomplete="off" />
+        <input id="gateToken" type="password" placeholder="Access code" autocomplete="off" />
         <button id="proceedBtn" class="btn">Proceed</button>
       </div>
 
       <div id="gateMsg" style="margin-top:10px;font-size:13px;color:#333;line-height:1.35;text-align:center">
-        The admin code is required each time the page loads.
+        An access code is required each time the page loads.
       </div>
     </div>
 
@@ -937,14 +937,14 @@
       }
 
       proceedBtn.disabled = true;
-      gateMsgEl.textContent = "Checking token...";
+      gateMsgEl.textContent = "Checking access code...";
       setStatus("Checking token...");
 
       const ok = await validateToken(token);
 
       if (!ok){
         proceedBtn.disabled = false;
-        gateMsgEl.textContent = "Token incorrect. Please try again.";
+        gateMsgEl.textContent = "Access code incorrect. Please try again.";
         setStatus("Token incorrect.");
         gateTokenEl.focus();
         return;
@@ -977,6 +977,7 @@
   </script>
 </body>
 </html>
+
 
 
 
