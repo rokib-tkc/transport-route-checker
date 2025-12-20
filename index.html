@@ -477,16 +477,28 @@
     }
 
     function getStartDateConsideringCutoff() {
-      const now = new Date();
-      const cutoffHour = 14; // 2pm
-      const afterCutoff = (now.getHours() > cutoffHour) || (now.getHours() === cutoffHour && now.getMinutes() > 0);
+  const now = new Date();
+  const cutoffHour = 14; // 2pm
 
-      let start = startOfDay(now);
-      if (!isWorkingDay(start)) start = nextWorkingDay(start);
-      if (afterCutoff) start = nextWorkingDay(start);
+  // Start from "today" (date only)
+  let start = startOfDay(now);
 
-      return start;
-    }
+  // If today is NOT a working day (weekend/bank hol), ignore the clock completely.
+  // Booking day becomes the next working day.
+  if (!isWorkingDay(start)) {
+    return nextWorkingDay(start);
+  }
+
+  // Only apply the 2pm rule on a working day
+  const afterCutoff =
+    (now.getHours() > cutoffHour) ||
+    (now.getHours() === cutoffHour && now.getMinutes() > 0);
+
+  if (afterCutoff) start = nextWorkingDay(start);
+
+  return start;
+}
+
 
     // Build next N WORKING DAYS (exclude weekends + bank holidays) — like Admin
     function buildNextWorkingDateCols(n){
@@ -925,3 +937,4 @@
   </script>
 </body>
 </html>
+
