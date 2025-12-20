@@ -694,6 +694,20 @@
       return out;
     }
 
+    function setToSortedArray(s){ return Array.from(s || []).sort((a,b)=>a-b); }
+
+function setsEqual(a, b){
+  if (!a || !b) return false;
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+function weekdaysToText(daysSet){
+  const names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  return setToSortedArray(daysSet).map(i => names[i]).join("|");
+}
+
     function stripBom(s) {
       return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
     }
@@ -985,7 +999,22 @@
           continue;
         }
 
-        if (days.size) schedule.set(route, days);
+       if (days.size){
+  if (!schedule.has(route)){
+    schedule.set(route, days);
+  } else {
+    const existing = schedule.get(route);
+    if (!setsEqual(existing, days)){
+      // IMPORTANT: do NOT overwrite. Log so you can see the offending row.
+      console.warn(
+        `[routes.csv] Conflicting schedules for route "${route}" on row ${r+1}. Keeping first.`,
+        { existing: weekdaysToText(existing), incoming: weekdaysToText(days), row: row }
+      );
+      // Keep existing schedule. Do nothing.
+    }
+  }
+}
+
 
         const prefixCell = row[prefixIdx];
         if (!routeDistricts.has(route)) routeDistricts.set(route, []);
@@ -1479,3 +1508,4 @@
   </script>
 </body>
 </html>
+
