@@ -690,6 +690,30 @@
       return out;
     }
 
+    function stripBom(s) {
+  return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+}
+
+function detectDelimiterFromText(text){
+  const cleaned = stripBom(String(text || ""));
+  const firstLine = cleaned.split(/\r?\n/).find(l => l.trim() !== "") || "";
+  return firstLine.includes("\t") ? "\t" : ",";
+}
+
+// TSV parser (simple) – assumes no quoted tabs (your files don’t use quoted TSV)
+function parseTSV(text){
+  const cleaned = stripBom(String(text || ""));
+  const lines = cleaned.split(/\r?\n/).filter(l => l.trim() !== "");
+  return lines.map(line => line.split("\t").map(c => String(c || "").trim()));
+}
+
+// Unified: if TSV -> parseTSV, else -> existing parseCSV (quoted CSV supported)
+function parseDelimitedSmart(text){
+  const delim = detectDelimiterFromText(text);
+  if (delim === "\t") return parseTSV(text);
+  return parseCSV(text); // your existing quoted CSV parser
+}
+
     function parseCSV(text){
       const rows = [];
       let cur = [];
@@ -1439,3 +1463,4 @@
   </script>
 </body>
 </html>
+
