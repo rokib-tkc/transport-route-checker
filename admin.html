@@ -24,7 +24,6 @@
 
     *{ box-sizing: border-box; font-family: Arial, sans-serif; }
 
-    /* Clean route-checker style page */
     body{
       margin: 0;
       padding: 20px;
@@ -39,7 +38,148 @@
       padding: 20px;
       border-radius: 10px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      position: relative; /* for archive link positioning */
     }
+
+    /* ---------- ARCHIVE LINK ---------- */
+    .archiveLink{
+      position: absolute;
+      top: 16px;
+      right: 18px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #0078d4;
+      text-decoration: underline;
+      cursor: pointer;
+      user-select: none;
+    }
+    .archiveLink:hover{ color:#005ea3; }
+
+    /* ---------- ARCHIVE OVERLAY ---------- */
+    .overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 99999;
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+      padding: 18px;
+    }
+    .overlayPanel{
+      width: 100%;
+      height: 100%;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .overlayHeader{
+      padding: 16px 18px;
+      background: #f7f7f7;
+      border-bottom: 1px solid #e5e5e5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .overlayTitle{
+      font-size: 18px;
+      font-weight: 800;
+      margin: 0;
+    }
+    .overlayControls{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .overlayControls label{
+      font-size: 13px;
+      font-weight: 700;
+      color: #333;
+    }
+    .overlayControls input[type="date"]{
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #cfcfcf;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .overlayBody{
+      padding: 16px 18px;
+      overflow: auto;
+      background: #fafafa;
+      flex: 1;
+    }
+
+    .archiveNote{
+      font-size: 13px;
+      color: #333;
+      margin: 0 0 12px;
+      line-height: 1.35;
+    }
+
+    .archiveDateHeading{
+      font-size: 16px;
+      font-weight: 800;
+      margin: 10px 0 12px;
+      text-align: left;
+    }
+
+    .archiveWrap{
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .archiveTable{
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .archiveTable th, .archiveTable td{
+      border: 1px solid #ddd;
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.25;
+      text-align: left;
+      vertical-align: middle;
+      word-break: break-word;
+      white-space: normal;
+    }
+    .archiveTable th{
+      background: var(--header);
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .pill{
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: 12px;
+      border: 1px solid #bbb;
+      background: #fff;
+    }
+    .pillWeight{ background: var(--red); color:#fff; border-color: #cc0000; }
+    .pillDrops{ background: var(--orange); color:#111; border-color: #d6a100; }
+
+    .overlayCloseBtn{
+      background: transparent;
+      color: #0078d4;
+      border: none;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+      font-size: 14px;
+    }
+    .overlayCloseBtn:hover{ color:#005ea3; }
 
     /* ---------- TOKEN GATE ---------- */
     .gateWrap{
@@ -125,16 +265,14 @@
     .chip{display:inline-flex;align-items:center;gap:6px}
     .dot{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid #999}
 
-    /* ---------- TABLE WRAP (clean block like Route Checker channel-block) ---------- */
+    /* ---------- TABLE WRAP ---------- */
     .wrap{
       margin: 0 auto;
       border: 1px solid #e0e0e0;
       border-radius: 10px;
       background: #fafafa;
       padding: 10px;
-
-      /* IMPORTANT: keep visible for sticky reliability */
-      overflow: visible;
+      overflow: visible; /* keep visible for sticky reliability */
     }
 
     table{
@@ -146,14 +284,12 @@
       background: #fff;
       border: 1px solid #ddd;
       border-radius: 8px;
-
-      /* IMPORTANT: DO NOT use overflow hidden here (breaks sticky header in many browsers) */
       font-size: 13px;
     }
 
     th, td{
       border: 1px solid #ddd;
-      padding: 6px 8px;     /* route checker table spacing */
+      padding: 6px 8px;
       text-align: center;
       vertical-align: middle;
       height: 44px;
@@ -172,15 +308,11 @@
       line-height: 1.15;
     }
 
-    /* ---------- STICKY HEADER ROW (sticks under address bar) ---------- */
+    /* ---------- STICKY HEADER ROW ---------- */
     thead th{
       position: sticky;
       top: 0;
       z-index: 20;
-    }
-
-    /* Make the TOP HEADER (dates) match Route Checker channel-title */
-    thead th{
       font-size: var(--channelTitleSize);
       font-weight: var(--channelTitleWeight);
       padding: 8px 10px;
@@ -192,21 +324,17 @@
       width: 230px;
     }
 
-    /* Top-left header cell */
     th.routeHead{
       position: sticky;
       left: 0;
-      z-index: 30; /* above all */
+      z-index: 30;
       text-align: left;
-
-      /* Match channel-title */
       font-size: var(--channelTitleSize);
       font-weight: var(--channelTitleWeight);
       padding: 8px 10px;
       background: var(--header);
     }
 
-    /* Left route column cells */
     .routeCell{
       background: var(--routecol);
       text-align: left;
@@ -214,8 +342,6 @@
       left: 0;
       z-index: 10;
       overflow: visible;
-
-      /* Match channel-title */
       font-size: var(--channelTitleSize);
       font-weight: var(--channelTitleWeight);
       padding: 8px 10px;
@@ -244,8 +370,8 @@
       color: inherit;
     }
     select option{
-  background: var(--inactive);
-  color: #111;
+      background: var(--inactive);
+      color: #111;
     }
     select:focus{outline: 2px solid #00000015; outline-offset: 2px;}
 
@@ -324,19 +450,20 @@
       select{font-size: 12px}
       th.routeHead, td.routeCell{width: 210px}
       .routeTooltip{min-width: 240px; max-width: 360px;}
-      /* Keep “channel-title feel” on smaller screens without going massive */
-      thead th, th.routeHead, td.routeCell{
-        font-size: 14px;
-      }
+      thead th, th.routeHead, td.routeCell{ font-size: 14px; }
     }
 
     @media (max-width: 600px){
       .btn{ width: 100%; }
+      .overlayControls{ width: 100%; justify-content: flex-start; }
+      .overlayControls input[type="date"]{ width: 100%; }
     }
   </style>
 </head>
 <body>
   <div class="container">
+
+    <div class="archiveLink hidden" id="archiveLink">Archive</div>
 
     <div class="top">
       <h1>Route Status Admin</h1>
@@ -381,6 +508,41 @@
 
   </div>
 
+  <!-- ARCHIVE OVERLAY -->
+  <div class="overlay hidden" id="archiveOverlay" aria-modal="true" role="dialog">
+    <div class="overlayPanel">
+      <div class="overlayHeader">
+        <div class="overlayTitle">Archive – Route Closures</div>
+
+        <div class="overlayControls">
+          <label for="archiveDate">Select date</label>
+          <input type="date" id="archiveDate" />
+          <button class="btn" id="archiveGoBtn">Proceed</button>
+          <button class="overlayCloseBtn" id="archiveCloseBtn">Close</button>
+        </div>
+      </div>
+
+      <div class="overlayBody">
+        <p class="archiveNote" id="archiveNote">
+          Select a past date to view which routes were marked as <b>Full</b> (Weight / Drops). Routes not listed were not marked as full.
+        </p>
+
+        <div class="legend" style="justify-content:flex-start;margin:0 0 12px">
+          <span class="chip"><span class="dot" style="background:var(--red)"></span> Full - On Weight</span>
+          <span class="chip"><span class="dot" style="background:var(--orange)"></span> Full - On Drops</span>
+        </div>
+
+        <div class="archiveDateHeading hidden" id="archiveHeading"></div>
+
+        <div class="archiveWrap hidden" id="archiveWrap">
+          <table class="archiveTable" id="archiveTable"></table>
+        </div>
+
+        <div id="archiveMsg" style="margin-top:12px;font-size:13px;color:#333"></div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const CONFIG = {
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
@@ -404,7 +566,6 @@
     const cellByKey = new Map();
 
     // Tooltip data built per session from routes.csv "prefix" column:
-    // route -> "B1–B20; DE2–DE10; ..."
     const routePostcodeGroups = new Map();
 
     const gateEl = document.getElementById("gate");
@@ -420,6 +581,17 @@
     const saveBtn = document.getElementById("saveBtn");
     const discardBtn = document.getElementById("discardBtn");
     const reloadBtn = document.getElementById("reloadBtn");
+
+    // Archive elements
+    const archiveLinkEl = document.getElementById("archiveLink");
+    const archiveOverlayEl = document.getElementById("archiveOverlay");
+    const archiveDateEl = document.getElementById("archiveDate");
+    const archiveGoBtn = document.getElementById("archiveGoBtn");
+    const archiveCloseBtn = document.getElementById("archiveCloseBtn");
+    const archiveTableEl = document.getElementById("archiveTable");
+    const archiveWrapEl = document.getElementById("archiveWrap");
+    const archiveMsgEl = document.getElementById("archiveMsg");
+    const archiveHeadingEl = document.getElementById("archiveHeading");
 
     function setStatus(msg){ statusEl.textContent = msg; }
     function pad2(n){ return String(n).padStart(2,"0"); }
@@ -923,6 +1095,15 @@
 
         buildGrid();
         setStatus("Loaded.");
+
+        // Archive date selector: only allow dates BEFORE the live window
+        // Min: arbitrary (empty) -> browser allows earlier; Max: day before the earliest live date.
+        const earliestLive = dateCols.length ? dateCols[0].iso : "";
+        if (earliestLive){
+          const d = new Date(earliestLive + "T00:00:00");
+          d.setDate(d.getDate() - 1);
+          archiveDateEl.max = toISODate(d);
+        }
       }catch(err){
         setStatus(`Error: ${String(err.message || err)}`);
         console.error(err);
@@ -955,18 +1136,171 @@
       gateEl.classList.add("hidden");
       appEl.classList.remove("hidden");
       controlsEl.classList.remove("hidden");
+      archiveLinkEl.classList.remove("hidden");
 
       await fullReload();
     }
 
+    // ---------- ARCHIVE ----------
+
+    function openArchive(){
+      // Ensure live pending warns? Archive is view-only, we allow open regardless.
+      archiveOverlayEl.classList.remove("hidden");
+      document.body.style.overflow = "hidden"; // prevent background scroll
+
+      archiveMsgEl.textContent = "";
+      archiveHeadingEl.classList.add("hidden");
+      archiveWrapEl.classList.add("hidden");
+      archiveTableEl.innerHTML = "";
+
+      // Default date: yesterday (if valid under max)
+      const max = archiveDateEl.max || "";
+      if (max){
+        archiveDateEl.value = max;
+      } else {
+        // fallback: yesterday
+        const d = new Date();
+        d.setDate(d.getDate()-1);
+        archiveDateEl.value = toISODate(d);
+      }
+
+      archiveDateEl.focus();
+    }
+
+    function closeArchive(){
+      archiveOverlayEl.classList.add("hidden");
+      document.body.style.overflow = ""; // restore scroll
+    }
+
+    function statusPillHTML(status){
+      if (status === STATUS.FULL_WEIGHT) return `<span class="pill pillWeight">${STATUS.FULL_WEIGHT}</span>`;
+      if (status === STATUS.FULL_DROPS) return `<span class="pill pillDrops">${STATUS.FULL_DROPS}</span>`;
+      return `<span class="pill">${status}</span>`;
+    }
+
+    async function loadArchiveForDate(dateISO){
+      archiveMsgEl.textContent = "Loading...";
+      archiveHeadingEl.classList.add("hidden");
+      archiveWrapEl.classList.add("hidden");
+      archiveTableEl.innerHTML = "";
+
+      if (!isISODate(dateISO)){
+        archiveMsgEl.textContent = "Please select a valid date.";
+        return;
+      }
+
+      // Enforce "past only (not currently in view)"
+      const earliestLive = dateCols.length ? dateCols[0].iso : null;
+      if (earliestLive && dateISO >= earliestLive){
+        archiveMsgEl.textContent = "Please select a date that is not in the current Live view.";
+        return;
+      }
+
+      try{
+        const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(dateISO)}&to=${encodeURIComponent(dateISO)}`;
+        const res = await fetch(url, { cache:"no-store" });
+        const data = await res.json().catch(()=>null);
+        if (!data || !data.ok) throw new Error((data && data.error) ? data.error : "API error");
+
+        const rows = (data.rows || [])
+          .map(r => ({
+            route: String(r.route || "").trim(),
+            status: String(r.status || "").trim()
+          }))
+          .filter(r => r.route && (r.status === STATUS.FULL_WEIGHT || r.status === STATUS.FULL_DROPS))
+          .sort((a,b)=>a.route.localeCompare(b.route,"en-GB",{numeric:true,sensitivity:"base"}));
+
+        const display = (() => {
+          const d = new Date(dateISO + "T00:00:00");
+          return d.toLocaleDateString("en-GB",{ weekday:"long", year:"numeric", month:"long", day:"numeric" });
+        })();
+
+        archiveHeadingEl.textContent = `Route closures for ${display}`;
+        archiveHeadingEl.classList.remove("hidden");
+
+        // Build table
+        let html = `
+          <thead>
+            <tr>
+              <th style="width:70%">Route</th>
+              <th style="width:30%">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
+
+        if (!rows.length){
+          html += `
+            <tr>
+              <td colspan="2" style="text-align:left;padding:14px 12px;background:#fff">
+                No routes were marked as <b>Full</b> on this date.
+              </td>
+            </tr>
+          `;
+        } else {
+          for (const r of rows){
+            html += `
+              <tr>
+                <td>${escapeHTML(r.route)}</td>
+                <td style="text-align:left">${statusPillHTML(r.status)}</td>
+              </tr>
+            `;
+          }
+        }
+
+        html += `</tbody>`;
+        archiveTableEl.innerHTML = html;
+        archiveWrapEl.classList.remove("hidden");
+        archiveMsgEl.textContent = "";
+      }catch(err){
+        archiveMsgEl.textContent = `Error: ${String(err.message || err)}`;
+        console.error(err);
+      }
+    }
+
+    function escapeHTML(s){
+      return String(s ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    // ---------- EVENTS ----------
     proceedBtn.addEventListener("click", proceed);
-    gateTokenEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") proceed();
-    });
+    gateTokenEl.addEventListener("keydown", (e) => { if (e.key === "Enter") proceed(); });
 
     reloadBtn.addEventListener("click", fullReload);
     discardBtn.addEventListener("click", discardPending);
     saveBtn.addEventListener("click", savePending);
+
+    archiveLinkEl.addEventListener("click", openArchive);
+    archiveCloseBtn.addEventListener("click", closeArchive);
+
+    archiveGoBtn.addEventListener("click", () => {
+      const d = (archiveDateEl.value || "").trim();
+      loadArchiveForDate(d);
+    });
+
+    archiveDateEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter"){
+        const d = (archiveDateEl.value || "").trim();
+        loadArchiveForDate(d);
+      }
+      if (e.key === "Escape") closeArchive();
+    });
+
+    archiveOverlayEl.addEventListener("click", (e) => {
+      // Click outside panel closes
+      if (e.target === archiveOverlayEl) closeArchive();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (!archiveOverlayEl.classList.contains("hidden") && e.key === "Escape"){
+        closeArchive();
+      }
+    });
 
     window.addEventListener("beforeunload", (e) => {
       if (pending.size > 0){
@@ -977,14 +1311,3 @@
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
