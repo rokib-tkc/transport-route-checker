@@ -883,7 +883,7 @@ function parseDelimitedSmart(text){
       if (!res.ok) return;
 
       const text = await res.text();
-      const rows = parseCSV(text);
+      const rows = parseDelimitedSmart(text);
       if (!rows.length) return;
 
       let startRow = 0;
@@ -925,7 +925,7 @@ function parseDelimitedSmart(text){
       if (!res.ok) throw new Error(`Failed to load routes.csv (${res.status})`);
 
       const text = await res.text();
-      const rows = parseCSV(text);
+      const rows = parseDelimitedSmart(text);
       if (rows.length < 2) throw new Error("routes.csv has no data rows");
 
       const headers = rows[0].map(normaliseHeader);
@@ -1463,4 +1463,5 @@ function parseDelimitedSmart(text){
   </script>
 </body>
 </html>
+
 
