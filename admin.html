@@ -41,6 +41,52 @@
       position: relative; /* for archive link positioning */
     }
 
+    /* ============================================================
+       LOADING OVERLAY (same UX style as Route Checker)
+       ============================================================ */
+    .loading-overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      padding: 20px;
+    }
+    .loading-panel{
+      width: 100%;
+      max-width: 360px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+      padding: 16px 18px;
+      text-align: center;
+    }
+    .spinner{
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 5px solid #d9d9d9;
+      border-top-color: #0078d4;
+      margin: 0 auto 12px;
+      animation: spin 0.85s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-title{
+      font-size: 14px;
+      font-weight: 800;
+      margin: 0 0 4px;
+      color: #111;
+    }
+    .loading-sub{
+      font-size: 12.5px;
+      margin: 0;
+      color: #444;
+      line-height: 1.35;
+    }
+
     /* ---------- ARCHIVE LINK ---------- */
     .archiveLink{
       position: absolute;
@@ -245,6 +291,11 @@
       margin: 0 0 10px;
     }
 
+    /* Keep status line for IMPORTANT/non-loading messages:
+       - Ready
+       - Pending route changes (when selecting cells)
+       - Saved / Errors
+       We will suppress "Checking access code / Please wait / Loading / Saving..." into spinner overlay instead. */
     .status{
       margin: 0 auto 12px;
       font-size: 13px;
@@ -504,6 +555,16 @@
   </style>
 </head>
 <body>
+
+  <!-- LOADING OVERLAY -->
+  <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true">
+    <div class="loading-panel">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="loading-title" id="loadingTitle">Loading…</p>
+      <p class="loading-sub" id="loadingSub">Please wait.</p>
+    </div>
+  </div>
+
   <div class="container">
 
     <div class="archiveLink hidden" id="archiveLink">Archive</div>
@@ -634,6 +695,11 @@
     const discardBtn = document.getElementById("discardBtn");
     const reloadBtn = document.getElementById("reloadBtn");
 
+    // Loading overlay elements
+    const loadingOverlayEl = document.getElementById("loadingOverlay");
+    const loadingTitleEl = document.getElementById("loadingTitle");
+    const loadingSubEl = document.getElementById("loadingSub");
+
     // Archive elements
     const archiveLinkEl = document.getElementById("archiveLink");
     const archiveOverlayEl = document.getElementById("archiveOverlay");
@@ -644,6 +710,28 @@
     const archiveWrapEl = document.getElementById("archiveWrap");
     const archiveMsgEl = document.getElementById("archiveMsg");
     const archiveHeadingEl = document.getElementById("archiveHeading");
+
+    // ============================================================
+    // LOADING OVERLAY HELPERS
+    // ============================================================
+    function setLoading(isLoading, title, sub){
+      if (title) loadingTitleEl.textContent = title;
+      if (sub) loadingSubEl.textContent = sub;
+
+      loadingOverlayEl.style.display = isLoading ? "flex" : "none";
+
+      // prevent spamming actions while busy
+      proceedBtn.disabled = isLoading ? true : proceedBtn.disabled;
+      reloadBtn.disabled = isLoading;
+      saveBtn.disabled = isLoading || pending.size === 0;
+      discardBtn.disabled = isLoading || pending.size === 0;
+      gateTokenEl.disabled = isLoading;
+
+      // also avoid overlay interaction while busy
+      archiveGoBtn.disabled = isLoading;
+      archiveCloseBtn.disabled = isLoading ? true : archiveCloseBtn.disabled;
+      archiveDateEl.disabled = isLoading;
+    }
 
     function setStatus(msg){ statusEl.textContent = msg; }
     function pad2(n){ return String(n).padStart(2,"0"); }
@@ -658,8 +746,14 @@
 
     function updateButtons(){
       const n = pending.size;
-      saveBtn.disabled = (n === 0);
-      discardBtn.disabled = (n === 0);
+      // When not loading, normal enable/disable behaviour
+      if (loadingOverlayEl.style.display === "flex"){
+        saveBtn.disabled = true;
+        discardBtn.disabled = true;
+      } else {
+        saveBtn.disabled = (n === 0);
+        discardBtn.disabled = (n === 0);
+      }
       saveBtn.textContent = (n === 0) ? "Save changes" : `Save changes (${n})`;
     }
 
@@ -696,17 +790,17 @@
 
     function setToSortedArray(s){ return Array.from(s || []).sort((a,b)=>a-b); }
 
-function setsEqual(a, b){
-  if (!a || !b) return false;
-  if (a.size !== b.size) return false;
-  for (const v of a) if (!b.has(v)) return false;
-  return true;
-}
+    function setsEqual(a, b){
+      if (!a || !b) return false;
+      if (a.size !== b.size) return false;
+      for (const v of a) if (!b.has(v)) return false;
+      return true;
+    }
 
-function weekdaysToText(daysSet){
-  const names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  return setToSortedArray(daysSet).map(i => names[i]).join("|");
-}
+    function weekdaysToText(daysSet){
+      const names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      return setToSortedArray(daysSet).map(i => names[i]).join("|");
+    }
 
     function stripBom(s) {
       return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
@@ -999,22 +1093,20 @@ function weekdaysToText(daysSet){
           continue;
         }
 
-       if (days.size){
-  if (!schedule.has(route)){
-    schedule.set(route, days);
-  } else {
-    const existing = schedule.get(route);
-    if (!setsEqual(existing, days)){
-      // IMPORTANT: do NOT overwrite. Log so you can see the offending row.
-      console.warn(
-        `[routes.csv] Conflicting schedules for route "${route}" on row ${r+1}. Keeping first.`,
-        { existing: weekdaysToText(existing), incoming: weekdaysToText(days), row: row }
-      );
-      // Keep existing schedule. Do nothing.
-    }
-  }
-}
-
+        if (days.size){
+          if (!schedule.has(route)){
+            schedule.set(route, days);
+          } else {
+            const existing = schedule.get(route);
+            if (!setsEqual(existing, days)){
+              console.warn(
+                `[routes.csv] Conflicting schedules for route "${route}" on row ${r+1}. Keeping first.`,
+                { existing: weekdaysToText(existing), incoming: weekdaysToText(days), row: row }
+              );
+              // Keep existing schedule
+            }
+          }
+        }
 
         const prefixCell = row[prefixIdx];
         if (!routeDistricts.has(route)) routeDistricts.set(route, []);
@@ -1204,6 +1296,8 @@ function weekdaysToText(daysSet){
               pending.set(k, { date: c.iso, route, status: sel.value });
               updateButtons();
               applyCellStyle(td, c.iso, route);
+
+              // Keep this (important) message in the status bar
               setStatus(`Pending: ${route} on ${c.iso} -> ${sel.value}`);
             });
 
@@ -1248,7 +1342,9 @@ function weekdaysToText(daysSet){
       if (pending.size === 0) return;
 
       const changes = Array.from(pending.values());
-      setStatus(`Saving ${changes.length} change(s)...`);
+
+      // Spinner instead of noisy status messages
+      setLoading(true, "Saving changes…", `Saving ${changes.length} update(s).`);
 
       const payload = JSON.stringify({
         action: "batch",
@@ -1256,36 +1352,47 @@ function weekdaysToText(daysSet){
         changes
       });
 
-      const res = await fetch(CONFIG.API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: payload
-      });
+      try{
+        const res = await fetch(CONFIG.API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: payload
+        });
 
-      const data = await res.json().catch(()=>null);
-      if (!data || !data.ok){
-        setStatus(`Save failed: ${(data && data.error) ? data.error : "Unknown error"}`);
-        return;
+        const data = await res.json().catch(()=>null);
+        if (!data || !data.ok){
+          setLoading(false);
+          setStatus(`Save failed: ${(data && data.error) ? data.error : "Unknown error"}`);
+          return;
+        }
+
+        pending.clear();
+        updateButtons();
+
+        setLoading(true, "Refreshing…", "Updating live data.");
+        await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
+
+        for (const [k, td] of cellByKey.entries()){
+          const [dateISO, route] = k.split("||");
+          const st = overrides.get(k) || STATUS.AVAILABLE;
+          setSelectValueInCell(td, st);
+          applyCellStyle(td, dateISO, route);
+        }
+
+        setLoading(false);
+        setStatus("Saved.");
+      }catch(err){
+        setLoading(false);
+        setStatus(`Save failed: ${String(err.message || err)}`);
+        console.error(err);
       }
-
-      pending.clear();
-      updateButtons();
-
-      await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
-
-      for (const [k, td] of cellByKey.entries()){
-        const [dateISO, route] = k.split("||");
-        const st = overrides.get(k) || STATUS.AVAILABLE;
-        setSelectValueInCell(td, st);
-        applyCellStyle(td, dateISO, route);
-      }
-
-      setStatus("Saved.");
     }
 
     async function fullReload(){
       try{
-        setStatus("Loading...");
+        // Spinner instead of "Loading..." text spam
+        setLoading(true, "Loading…", "Fetching schedule and live status.");
+
         pending.clear();
         updateButtons();
 
@@ -1296,7 +1403,6 @@ function weekdaysToText(daysSet){
         await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
 
         buildGrid();
-        setStatus("Loaded.");
 
         // Archive date selector: only allow dates BEFORE the live window
         const earliestLive = dateCols.length ? dateCols[0].iso : "";
@@ -1305,7 +1411,11 @@ function weekdaysToText(daysSet){
           d.setDate(d.getDate() - 1);
           archiveDateEl.max = toISODate(d);
         }
+
+        setLoading(false);
+        setStatus("Ready.");
       }catch(err){
+        setLoading(false);
         setStatus(`Error: ${String(err.message || err)}`);
         console.error(err);
       }
@@ -1319,27 +1429,38 @@ function weekdaysToText(daysSet){
       }
 
       proceedBtn.disabled = true;
-      gateMsgEl.textContent = "Checking access code...";
-      setStatus("Please wait...");
 
-      const ok = await validateToken(token);
+      // Spinner instead of "Checking access code... / Please wait..."
+      setLoading(true, "Checking access…", "Verifying access code.");
 
-      if (!ok){
+      try{
+        const ok = await validateToken(token);
+
+        if (!ok){
+          setLoading(false);
+          proceedBtn.disabled = false;
+          gateMsgEl.textContent = "Access code incorrect. Please try again.";
+          setStatus("Invalid access code.");
+          gateTokenEl.focus();
+          return;
+        }
+
+        sessionToken = token;
+
+        gateEl.classList.add("hidden");
+        appEl.classList.remove("hidden");
+        controlsEl.classList.remove("hidden");
+        archiveLinkEl.classList.remove("hidden");
+
+        // Keep spinner while we load everything
+        setLoading(true, "Loading admin grid…", "Fetching routes and live status.");
+        await fullReload(); // fullReload will hide spinner itself on success/fail
+      }catch(err){
+        setLoading(false);
         proceedBtn.disabled = false;
-        gateMsgEl.textContent = "Access code incorrect. Please try again.";
-        setStatus("Invalid access code.");
-        gateTokenEl.focus();
-        return;
+        setStatus(`Error: ${String(err.message || err)}`);
+        console.error(err);
       }
-
-      sessionToken = token;
-
-      gateEl.classList.add("hidden");
-      appEl.classList.remove("hidden");
-      controlsEl.classList.remove("hidden");
-      archiveLinkEl.classList.remove("hidden");
-
-      await fullReload();
     }
 
     // ---------- ARCHIVE ----------
@@ -1376,18 +1497,23 @@ function weekdaysToText(daysSet){
     }
 
     async function loadArchiveForDate(dateISO){
-      archiveMsgEl.textContent = "Loading...";
+      // Spinner for archive load too (removes "Loading..." spam)
+      setLoading(true, "Loading archive…", "Fetching saved closures for the selected date.");
+
+      archiveMsgEl.textContent = "";
       archiveHeadingEl.classList.add("hidden");
       archiveWrapEl.classList.add("hidden");
       archiveTableEl.innerHTML = "";
 
       if (!isISODate(dateISO)){
+        setLoading(false);
         archiveMsgEl.textContent = "Please select a valid date.";
         return;
       }
 
       const earliestLive = dateCols.length ? dateCols[0].iso : null;
       if (earliestLive && dateISO >= earliestLive){
+        setLoading(false);
         archiveMsgEl.textContent = "Please select a date that is not in the current Live view.";
         return;
       }
@@ -1446,8 +1572,10 @@ function weekdaysToText(daysSet){
         html += `</tbody>`;
         archiveTableEl.innerHTML = html;
         archiveWrapEl.classList.remove("hidden");
-        archiveMsgEl.textContent = "";
+
+        setLoading(false);
       }catch(err){
+        setLoading(false);
         archiveMsgEl.textContent = `Error: ${String(err.message || err)}`;
         console.error(err);
       }
@@ -1469,9 +1597,17 @@ function weekdaysToText(daysSet){
     proceedBtn.addEventListener("click", proceed);
     gateTokenEl.addEventListener("keydown", (e) => { if (e.key === "Enter") proceed(); });
 
-    reloadBtn.addEventListener("click", fullReload);
+    reloadBtn.addEventListener("click", () => {
+      // Reload spinner handled inside fullReload
+      fullReload();
+    });
+
     discardBtn.addEventListener("click", discardPending);
-    saveBtn.addEventListener("click", savePending);
+
+    saveBtn.addEventListener("click", () => {
+      // Save spinner handled inside savePending
+      savePending();
+    });
 
     archiveLinkEl.addEventListener("click", openArchive);
     archiveCloseBtn.addEventListener("click", closeArchive);
@@ -1508,4 +1644,3 @@ function weekdaysToText(daysSet){
   </script>
 </body>
 </html>
-
