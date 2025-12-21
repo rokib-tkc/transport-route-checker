@@ -130,16 +130,17 @@
     }
 
     /* ============================================================
-       ROUTE STATUS STRIP (View-only) — matches Admin colours
+       ROUTE STATUS STRIP (View-only) — softened colours
        ============================================================ */
     :root{
       --border:#cfcfcf;
       --header:#f0f0f0;
       --inactive:#f7f7f7;
 
-      --green:#00b050;
-      --red:#ff0000;
-      --orange:#ffc000;
+      /* softened status colours */
+      --green:#dff3e6;    /* light mint */
+      --red:#f7d6d6;      /* light rose */
+      --orange:#fde8c8;   /* light amber */
     }
 
     .status-strip{
@@ -178,16 +179,24 @@
       font-size: 12.5px;
     }
 
-    .inactiveCell{ background: var(--inactive); color:#222; }
-    .availableCell{ background: var(--green); color:#111; }
-    .fullWeightCell{ background: var(--red); color:#fff; }
-    .fullDropsCell{ background: var(--orange); color:#111; }
-
-    .status-note{
-      margin-top: 6px;
-      font-size: 12px;
+    .inactiveCell{
+      background: var(--inactive);
       color: #555;
-      line-height: 1.35;
+    }
+
+    .availableCell{
+      background: var(--green);
+      color: #1f6b3a;
+    }
+
+    .fullWeightCell{
+      background: var(--red);
+      color: #8a1f1f;
+    }
+
+    .fullDropsCell{
+      background: var(--orange);
+      color: #8a5a12;
     }
 
     /* ============================================================
@@ -729,10 +738,6 @@
             ${tbody}
           </table>
         </div>
-        <div class="status-note">
-          Starts from the <b>next delivery date</b> for this channel and shows the next ${dateCols.length} working days (excluding UK bank holidays).
-          A scheduled day will show <b>Available</b> unless the Google Sheet marks it as <b>Full</b>.
-        </div>
       `;
     }
 
@@ -800,8 +805,7 @@
         const nextDate = findNextDeliveryDate(allDays, leadTime);
         const nextDeliveryText = nextDate ? formatDayDate(nextDate) : "";
 
-        // IMPORTANT CHANGE:
-        // Status strip now starts from the channel's NEXT DELIVERY date (reduces noise / closed cells).
+        // Status strip starts from the channel's NEXT DELIVERY date
         const stripStart = nextDate || getStartDateConsideringCutoff();
         const dateColsForChannel = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
 
@@ -953,12 +957,7 @@
 
         const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
 
-        // ------------------------------------------------------------
-        // IMPORTANT CHANGE:
-        // We now load overrides for a range that covers the per-channel
-        // status windows (because each channel can start on a different
-        // next-delivery date).
-        // ------------------------------------------------------------
+        // Load overrides once for a range that covers all per-channel status windows
         const grouped = groupByChannel(matchingRows);
         const channels = Object.keys(grouped);
 
@@ -984,7 +983,6 @@
           }
         }
 
-        // Load overrides once for the full window across all channels
         if (globalFromISO && globalToISO){
           try{
             setLoading(true, "Loading live route status…", "Almost there.");
@@ -996,7 +994,6 @@
 
         buildResultsHTML(matchingRows, bestPrefix, input);
 
-        // Smooth finish
         setLoading(false);
 
       }catch(err){
@@ -1040,4 +1037,3 @@
   </script>
 </body>
 </html>
-
