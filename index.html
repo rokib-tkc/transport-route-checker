@@ -318,6 +318,7 @@
     // ============================================================
     const CONFIG = {
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
+      // Number of WORKING DAYS to show in the route status view, starting from that channel's NEXT DELIVERY date
       DAYS_AHEAD: 10
     };
 
@@ -359,7 +360,6 @@
     // ============================================================
     // DELIMITER-DETECTING PARSER (comma CSV or tab TSV)
     // ============================================================
-
     function stripBom(s) {
       return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
     }
@@ -394,7 +394,6 @@
     // ============================================================
     // CHANNEL RULES (LOADED FROM channel_rules.csv)
     // ============================================================
-
     let channelRules = {};
 
     function loadChannelRules() {
@@ -427,7 +426,6 @@
     // ============================================================
     // BANK HOLIDAYS (LOADED FROM bank_holidays.csv)
     // ============================================================
-
     let bankHolidaySet = new Set(); // ISO YYYY-MM-DD
     let bankHolidaysReady = Promise.resolve();
 
@@ -466,7 +464,6 @@
     // ============================================================
     // ROUTES PARSING (routes.csv can be comma or tab separated)
     // ============================================================
-
     function normalisePrefix(v) {
       return String(v || "").toUpperCase().replace(/\s+/g, "").trim();
     }
@@ -493,7 +490,6 @@
     // ============================================================
     // WORKING DAY + CUTOFF HELPERS (used by channels and Carrier)
     // ============================================================
-
     function parseLeadTimeWorkingDays(leadTimeText) {
       const t = String(leadTimeText || "").toLowerCase();
       const m = t.match(/(\d+)/);
@@ -575,25 +571,26 @@
       return start;
     }
 
-    // Build next N WORKING DAYS (exclude weekends + bank holidays) — anchored to booking day
-    function buildNextWorkingDateCols(n){
+    // Build N WORKING DAYS (exclude weekends + bank holidays), starting from a given date (inclusive if working day).
+    function buildWorkingDateColsFrom(startDate, n){
       const cols = [];
-      const start = startOfDay(getStartDateConsideringCutoff()); // anchor to booking day
-      let i = 0;
+      let d = startOfDay(startDate);
 
-      while (cols.length < n && i < 730){
-        const d = new Date(start);
-        d.setDate(d.getDate() + i);
+      // If somehow we're given a non-working day, move forward to the next working day
+      if (!isWorkingDay(d)) d = nextWorkingDay(d);
 
+      let safety = 0;
+      while (cols.length < n && safety < 730){
         if (isWorkingDay(d)){
           cols.push({
-            date: d,
+            date: new Date(d),
             iso: toISODateKey(d),
             weekday: d.getDay(),
             head: `${weekdayShort(d)}<br>${displayDateShort(d)}`
           });
         }
-        i++;
+        d.setDate(d.getDate() + 1);
+        safety++;
       }
       return cols;
     }
@@ -618,7 +615,6 @@
     // ============================================================
     // CHANNEL NEXT DELIVERY CALCULATION (days + lead time + cutoff + bank hols)
     // ============================================================
-
     function findNextDeliveryDate(allowedDays, leadTimeText) {
       if (!Array.isArray(allowedDays) || allowedDays.length === 0) return null;
 
@@ -643,7 +639,6 @@
     // ============================================================
     // ROUTE STATUS OVERRIDES (Google Sheet via Apps Script)
     // ============================================================
-
     // key: "YYYY-MM-DD||ROUTE" -> status string
     const overridesMap = new Map();
 
@@ -670,7 +665,6 @@
     // ============================================================
     // STATUS STRIP LOGIC (View-only, channel rule wins)
     // ============================================================
-
     function earliestBookableDeliveryDate(leadDays){
       const start = getStartDateConsideringCutoff();
       return (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
@@ -735,7 +729,8 @@
           </table>
         </div>
         <div class="status-note">
-          Shows the next ${dateCols.length} working days (excluding UK bank holidays). Status is <b>Closed</b> if inside the channel lead-time / cut-off window.
+          Starts from the <b>next delivery date</b> for this channel and shows the next ${dateCols.length} working days (excluding UK bank holidays).
+          A scheduled day will show <b>Available</b> unless the Google Sheet marks it as <b>Full</b>.
         </div>
       `;
     }
@@ -743,7 +738,6 @@
     // ============================================================
     // CORE HELPERS
     // ============================================================
-
     function normaliseInputPostcode(raw) {
       return raw ? raw.toUpperCase().replace(/\s+/g, "") : "";
     }
@@ -771,7 +765,7 @@
       });
     }
 
-    function buildResultsHTML(rows, usedPrefix, originalInput, dateCols) {
+    function buildResultsHTML(rows, usedPrefix, originalInput) {
       const grouped = groupByChannel(rows);
       const channels = Object.keys(grouped).sort();
 
@@ -805,7 +799,12 @@
         const nextDate = findNextDeliveryDate(allDays, leadTime);
         const nextDeliveryText = nextDate ? formatDayDate(nextDate) : "";
 
-        const statusStripHTML = buildStatusStripHTML(route, allDays, leadTime, dateCols);
+        // IMPORTANT CHANGE:
+        // Status strip now starts from the channel's NEXT DELIVERY date (reduces noise / closed cells).
+        const stripStart = nextDate || getStartDateConsideringCutoff();
+        const dateColsForChannel = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+
+        const statusStripHTML = buildStatusStripHTML(route, allDays, leadTime, dateColsForChannel);
 
         html += `
           <div class="channel-block">
@@ -856,7 +855,6 @@
     // ============================================================
     // TOOLTIP HANDLING
     // ============================================================
-
     function attachChannelRuleEvents() {
       const triggers = document.querySelectorAll(".channel-rules-trigger");
       const tooltip = document.getElementById("channelTooltip");
@@ -897,7 +895,6 @@
     // ============================================================
     // LANDING / VISIBILITY CONTROL
     // ============================================================
-
     function showLandingCarrier() {
       document.getElementById("carrierBlock").style.display = "block";
       document.getElementById("resultsMeta").style.display = "none";
@@ -912,7 +909,6 @@
     // ============================================================
     // SEARCH HANDLING (FETCH ROUTES ON EACH SEARCH)
     // ============================================================
-
     async function performSearch() {
       const input = document.getElementById("postcodeInput").value.trim();
 
@@ -954,21 +950,50 @@
         // valid match: hide landing carrier and show results
         hideLandingCarrier();
 
-        // Build next 10 working days (excluding bank holidays)
-        const dateCols = buildNextWorkingDateCols(CONFIG.DAYS_AHEAD);
+        const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
 
-        // Load overrides once for the full 10-day working window
-        if (dateCols.length){
+        // ------------------------------------------------------------
+        // IMPORTANT CHANGE:
+        // We now load overrides for a range that covers the per-channel
+        // status windows (because each channel can start on a different
+        // next-delivery date).
+        // ------------------------------------------------------------
+        const grouped = groupByChannel(matchingRows);
+        const channels = Object.keys(grouped);
+
+        let globalFromISO = null;
+        let globalToISO = null;
+
+        for (const channel of channels){
+          const rowsForChannel = grouped[channel];
+
+          const leadTime = rowsForChannel[0].leadTime;
+          const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
+
+          const nextDate = findNextDeliveryDate(allDays, leadTime);
+          const stripStart = nextDate || getStartDateConsideringCutoff();
+          const cols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+
+          if (cols.length){
+            const fromISO = cols[0].iso;
+            const toISO = cols[cols.length - 1].iso;
+
+            if (!globalFromISO || fromISO < globalFromISO) globalFromISO = fromISO;
+            if (!globalToISO || toISO > globalToISO) globalToISO = toISO;
+          }
+        }
+
+        // Load overrides once for the full window across all channels
+        if (globalFromISO && globalToISO){
           try{
             setLoading(true, "Loading live route status…", "Almost there.");
-            await loadOverridesForRange(dateCols[0].iso, dateCols[dateCols.length - 1].iso);
+            await loadOverridesForRange(globalFromISO, globalToISO);
           }catch(apiErr){
             console.warn("Route status API not available. Showing defaults:", apiErr);
           }
         }
 
-        const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
-        buildResultsHTML(matchingRows, bestPrefix, input, dateCols);
+        buildResultsHTML(matchingRows, bestPrefix, input);
 
         // Smooth finish
         setLoading(false);
@@ -989,7 +1014,6 @@
     // ============================================================
     // INIT
     // ============================================================
-
     (function init() {
       // Load channel rules in background
       loadChannelRules();
@@ -1015,4 +1039,3 @@
   </script>
 </body>
 </html>
-
