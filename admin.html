@@ -38,7 +38,7 @@
       padding: 20px;
       border-radius: 10px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      position: relative; /* for archive link positioning */
+      position: relative; /* for top pills positioning */
     }
 
     /* ============================================================
@@ -87,19 +87,37 @@
       line-height: 1.35;
     }
 
-    /* ---------- ARCHIVE LINK ---------- */
-    .archiveLink{
+    /* ============================================================
+       TOP PILLS (Archive left, Log out right)
+       ============================================================ */
+    .topPill{
       position: absolute;
-      top: 16px;
-      right: 18px;
-      font-size: 14px;
-      font-weight: 700;
+      top: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #cfcfcf;
+      background: #ffffff;
       color: #0078d4;
-      text-decoration: underline;
+      font-size: 13px;
+      font-weight: 800;
       cursor: pointer;
       user-select: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
     }
-    .archiveLink:hover{ color:#005ea3; }
+    .topPill:hover{
+      border-color: #b7b7b7;
+      color: #005ea3;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    }
+    .topPill:active{
+      transform: translateY(1px);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .archivePill{ left: 16px; }
+    .logoutPill{ right: 16px; }
 
     /* ---------- ARCHIVE OVERLAY ---------- */
     .overlay{
@@ -291,11 +309,7 @@
       margin: 0 0 10px;
     }
 
-    /* Keep status line for IMPORTANT/non-loading messages:
-       - Ready
-       - Pending route changes (when selecting cells)
-       - Saved / Errors
-       We will suppress "Checking access code / Please wait / Loading / Saving..." into spinner overlay instead. */
+    /* Keep status line for IMPORTANT/non-loading messages */
     .status{
       margin: 0 auto 12px;
       font-size: 13px;
@@ -551,6 +565,14 @@
       .btn{ width: 100%; }
       .overlayControls{ width: 100%; justify-content: flex-start; }
       .overlayControls input[type="date"]{ width: 100%; }
+
+      /* keep pills reachable on small screens */
+      .topPill{
+        padding: 6px 9px;
+        font-size: 12.5px;
+      }
+      .archivePill{ left: 12px; }
+      .logoutPill{ right: 12px; }
     }
   </style>
 </head>
@@ -567,7 +589,9 @@
 
   <div class="container">
 
-    <div class="archiveLink hidden" id="archiveLink">Archive</div>
+    <!-- TOP PILLS -->
+    <div class="topPill archivePill hidden" id="archiveLink" role="button" tabindex="0" aria-label="Open archive">Archive</div>
+    <div class="topPill logoutPill hidden" id="logoutLink" role="button" tabindex="0" aria-label="Log out">Log out</div>
 
     <div class="top">
       <h1>Route Status Admin</h1>
@@ -702,6 +726,7 @@
 
     // Archive elements
     const archiveLinkEl = document.getElementById("archiveLink");
+    const logoutLinkEl = document.getElementById("logoutLink");
     const archiveOverlayEl = document.getElementById("archiveOverlay");
     const archiveDateEl = document.getElementById("archiveDate");
     const archiveGoBtn = document.getElementById("archiveGoBtn");
@@ -731,6 +756,12 @@
       archiveGoBtn.disabled = isLoading;
       archiveCloseBtn.disabled = false;
       archiveDateEl.disabled = isLoading;
+
+      // also stop logout/archive spam while loading
+      archiveLinkEl.style.pointerEvents = isLoading ? "none" : "";
+      logoutLinkEl.style.pointerEvents = isLoading ? "none" : "";
+      archiveLinkEl.style.opacity = isLoading ? "0.6" : "";
+      logoutLinkEl.style.opacity = isLoading ? "0.6" : "";
     }
 
     function setStatus(msg){ statusEl.textContent = msg; }
@@ -1032,7 +1063,6 @@
     }
 
     // ---------- Load schedule & build tooltip groups from routes.csv ----------
-    // CHANGE: Only infer schedules/tooltip groups from Component Channel rows
     async function loadScheduleFromCSV(){
       const res = await fetch(CONFIG.ROUTES_CSV_URL + "?cb=" + Date.now(), { cache:"no-store" });
       if (!res.ok) throw new Error(`Failed to load routes.csv (${res.status})`);
@@ -1421,6 +1451,49 @@
       }
     }
 
+    // ---------- LOG OUT ----------
+    function logout(){
+      if (loadingOverlayEl.style.display === "flex") return;
+
+      if (pending.size > 0){
+        const ok = confirm(`You have ${pending.size} pending change(s). Log out and lose them?`);
+        if (!ok) return;
+      }
+
+      // Close archive if open
+      closeArchive();
+
+      // Clear session + state
+      sessionToken = "";
+      pending.clear();
+      overrides.clear();
+      schedule.clear();
+      bankHolidays.clear();
+      dateCols = [];
+      cellByKey.clear();
+      currentRouteFilter = "";
+      routeFilterSelectEl = null;
+      routeFilterClearEl = null;
+      gridEl.innerHTML = "";
+
+      // Hide app, show gate
+      appEl.classList.add("hidden");
+      controlsEl.classList.add("hidden");
+      archiveLinkEl.classList.add("hidden");
+      logoutLinkEl.classList.add("hidden");
+      gateEl.classList.remove("hidden");
+
+      // Reset UI text
+      proceedBtn.disabled = false;
+      gateTokenEl.disabled = false;
+      gateTokenEl.value = "";
+      gateMsgEl.textContent = "An access code is required each time the page loads.";
+      setStatus("Ready.");
+
+      // Put cursor back where they need it
+      gateTokenEl.focus();
+    }
+
     async function proceed(){
       const token = (gateTokenEl.value || "").trim();
       if (!token){
@@ -1451,6 +1524,7 @@
         appEl.classList.remove("hidden");
         controlsEl.classList.remove("hidden");
         archiveLinkEl.classList.remove("hidden");
+        logoutLinkEl.classList.remove("hidden");
 
         // Keep spinner while we load everything
         setLoading(true, "Loading admin grid…", "Fetching routes and live status.");
@@ -1609,7 +1683,19 @@
       savePending();
     });
 
+    // Archive pill click + keyboard accessibility
     archiveLinkEl.addEventListener("click", openArchive);
+    archiveLinkEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") openArchive();
+    });
+
+    // Log out pill click + keyboard accessibility
+    logoutLinkEl.addEventListener("click", logout);
+    logoutLinkEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") logout();
+    });
+
+    // Archive overlay controls
     archiveCloseBtn.addEventListener("click", closeArchive);
 
     archiveGoBtn.addEventListener("click", () => {
@@ -1644,5 +1730,3 @@
   </script>
 </body>
 </html>
-
-
