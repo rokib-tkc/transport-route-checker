@@ -129,18 +129,14 @@
       display: none;
     }
 
-    /* ============================================================
-       ROUTE STATUS STRIP (View-only) — softened colours
-       ============================================================ */
     :root{
       --border:#cfcfcf;
       --header:#f0f0f0;
       --inactive:#f7f7f7;
 
-      /* softened status colours */
-      --green:#dff3e6;    /* light mint */
-      --red:#f7d6d6;      /* light rose */
-      --orange:#fde8c8;   /* light amber */
+      --green:#dff3e6;
+      --red:#f7d6d6;
+      --orange:#fde8c8;
     }
 
     .status-strip{
@@ -199,7 +195,6 @@
       color: #8a5a12;
     }
 
-    /* Placeholder strip */
     .status-loading-row{
       height: 44px;
       font-weight: 700;
@@ -208,9 +203,6 @@
       background: #fff;
     }
 
-    /* ============================================================
-       LOADING OVERLAY (only for routes fetch)
-       ============================================================ */
     .loading-overlay{
       position: fixed;
       inset: 0;
@@ -270,7 +262,6 @@
 </head>
 
 <body>
-  <!-- LOADING OVERLAY -->
   <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true">
     <div class="loading-panel">
       <div class="spinner" aria-hidden="true"></div>
@@ -294,7 +285,6 @@
       No routing information found for that postcode prefix.
     </div>
 
-    <!-- LANDING: Carrier table shows before any successful search -->
     <div id="carrierBlock" class="channel-block" style="display:block;">
       <div class="channel-header">
         <div class="channel-title">Carrier</div>
@@ -334,13 +324,17 @@
 
   <script>
     // ============================================================
-    // CONFIG (Route Status API)
+    // CONFIG
     // ============================================================
     const CONFIG = {
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
-      // Number of WORKING DAYS to show in the route status view, starting from that channel's NEXT DELIVERY date
       DAYS_AHEAD: 10
     };
+
+    // ============================================================
+    // ROUTES SOURCE (Google Sheets CSV)
+    // ============================================================
+    const ROUTES_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRH6-jQDjHdpThiVhGe1mwrfOD_QRYbYYlCx8Mo1HvA-vLxudRTnpJMRWEZlyxGE-f9OXtnQBGDWoLB/pub?gid=0&single=true&output=csv";
 
     const STATUS = {
       AVAILABLE: "Available",
@@ -349,9 +343,6 @@
       CLOSED: "Closed"
     };
 
-    // ============================================================
-    // LOADING UI HELPERS
-    // ============================================================
     function setLoading(isLoading, title, sub, lockControls = true){
       const overlay = document.getElementById("loadingOverlay");
       const t = document.getElementById("loadingTitle");
@@ -364,7 +355,6 @@
 
       overlay.style.display = isLoading ? "flex" : "none";
 
-      // Only lock controls when fetching routes (not while status loads in background)
       if (lockControls){
         btn.disabled = isLoading;
         input.disabled = isLoading;
@@ -372,16 +362,12 @@
     }
 
     function clearResultsForLoading(){
-      // We clear results immediately, but we'll only show overlay while fetching routes.csv
       document.getElementById("carrierBlock").style.display = "none";
       document.getElementById("resultsMeta").style.display = "none";
       document.getElementById("resultsContainer").innerHTML = "";
       document.getElementById("noResults").style.display = "none";
     }
 
-    // ============================================================
-    // DELIMITER-DETECTING PARSER (comma CSV or tab TSV)
-    // ============================================================
     function stripBom(s) {
       return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
     }
@@ -413,9 +399,6 @@
       return { headers, rows };
     }
 
-    // ============================================================
-    // CHANNEL RULES (LOADED FROM channel_rules.csv)
-    // ============================================================
     let channelRules = {};
 
     function loadChannelRules() {
@@ -445,10 +428,7 @@
         });
     }
 
-    // ============================================================
-    // BANK HOLIDAYS (LOADED FROM bank_holidays.csv)
-    // ============================================================
-    let bankHolidaySet = new Set(); // ISO YYYY-MM-DD
+    let bankHolidaySet = new Set();
     let bankHolidaysReady = Promise.resolve();
 
     function toISODateKey(dateObj) {
@@ -469,8 +449,8 @@
           const set = new Set();
 
           parsed.rows.forEach(row => {
-            const d = (row.date || "").trim();           // expected YYYY-MM-DD
-            const div = (row.division || "").trim();     // england-and-wales
+            const d = (row.date || "").trim();
+            const div = (row.division || "").trim();
             if (!d) return;
             if (!div || div === "england-and-wales") set.add(d);
           });
@@ -483,9 +463,6 @@
         });
     }
 
-    // ============================================================
-    // ROUTES PARSING (routes.csv can be comma or tab separated)
-    // ============================================================
     function normalisePrefix(v) {
       return String(v || "").toUpperCase().replace(/\s+/g, "").trim();
     }
@@ -509,9 +486,6 @@
       }).filter(r => r.prefix && r.channel);
     }
 
-    // ============================================================
-    // WORKING DAY + CUTOFF HELPERS (used by channels and Carrier)
-    // ============================================================
     function parseLeadTimeWorkingDays(leadTimeText) {
       const t = String(leadTimeText || "").toLowerCase();
       const m = t.match(/(\d+)/);
@@ -522,7 +496,7 @@
     }
 
     function isWorkingDay(dateObj) {
-      const day = dateObj.getDay(); // 0 Sun ... 6 Sat
+      const day = dateObj.getDay();
       if (day === 0 || day === 6) return false;
       const iso = toISODateKey(dateObj);
       if (bankHolidaySet.has(iso)) return false;
@@ -572,7 +546,7 @@
 
     function getStartDateConsideringCutoff() {
       const now = new Date();
-      const cutoffHour = 14; // 2pm
+      const cutoffHour = 14;
 
       let start = startOfDay(now);
 
@@ -589,7 +563,6 @@
       return start;
     }
 
-    // Build N WORKING DAYS (exclude weekends + bank holidays), starting from a given date
     function buildWorkingDateColsFrom(startDate, n){
       const cols = [];
       let d = startOfDay(startDate);
@@ -612,7 +585,6 @@
       return cols;
     }
 
-    // Carrier next dates
     function computeCarrierNextDates() {
       const start = getStartDateConsideringCutoff();
       const overnight = addWorkingDays(start, 1);
@@ -622,9 +594,6 @@
       document.getElementById("carrier13Next").textContent = formatDayDate(day3);
     }
 
-    // ============================================================
-    // CHANNEL NEXT DELIVERY CALCULATION
-    // ============================================================
     function findNextDeliveryDate(allowedDays, leadTimeText) {
       if (!Array.isArray(allowedDays) || allowedDays.length === 0) return null;
 
@@ -643,9 +612,6 @@
       return null;
     }
 
-    // ============================================================
-    // ROUTE STATUS OVERRIDES (Google Sheet via Apps Script)
-    // ============================================================
     const overridesMap = new Map();
 
     function ovKey(dateISO, route){
@@ -668,9 +634,6 @@
       }
     }
 
-    // ============================================================
-    // STATUS STRIP LOGIC (channel rule wins)
-    // ============================================================
     function earliestBookableDeliveryDate(leadDays){
       const start = getStartDateConsideringCutoff();
       return (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
@@ -757,9 +720,6 @@
       `;
     }
 
-    // ============================================================
-    // CORE HELPERS
-    // ============================================================
     function normaliseInputPostcode(raw) {
       return raw ? raw.toUpperCase().replace(/\s+/g, "") : "";
     }
@@ -788,14 +748,12 @@
     }
 
     function makeSafeId(str){
-      // stable + safe for DOM ids
       return "ch_" + btoa(unescape(encodeURIComponent(String(str))))
         .replace(/=+$/,"")
         .replace(/[+/]/g, "_");
     }
 
-    // Holds latest channel strip metadata for async updates
-    let pendingStripMeta = []; // [{ channel, route, allDays, leadTime, dateCols, stripId }]
+    let pendingStripMeta = [];
     let currentSearchToken = 0;
 
     function buildResultsHTML(rows, usedPrefix, originalInput, metaForStrips) {
@@ -838,9 +796,6 @@
         const dateColsForChannel = meta ? meta.dateCols : buildWorkingDateColsFrom(nextDate || getStartDateConsideringCutoff(), CONFIG.DAYS_AHEAD);
         const stripId = meta ? meta.stripId : makeSafeId(channel);
 
-        // IMPORTANT CHANGE:
-        // Render route info table immediately.
-        // Render a placeholder status strip that will be replaced when overrides arrive.
         const statusStripPlaceholder = buildStatusStripPlaceholderHTML(dateColsForChannel);
 
         html += `
@@ -899,9 +854,6 @@
       }
     }
 
-    // ============================================================
-    // TOOLTIP HANDLING
-    // ============================================================
     function attachChannelRuleEvents() {
       const triggers = document.querySelectorAll(".channel-rules-trigger");
       const tooltip = document.getElementById("channelTooltip");
@@ -939,9 +891,6 @@
       });
     }
 
-    // ============================================================
-    // LANDING / VISIBILITY CONTROL
-    // ============================================================
     function showLandingCarrier() {
       document.getElementById("carrierBlock").style.display = "block";
       document.getElementById("resultsMeta").style.display = "none";
@@ -953,9 +902,6 @@
       document.getElementById("carrierBlock").style.display = "none";
     }
 
-    // ============================================================
-    // SEARCH HANDLING
-    // ============================================================
     async function performSearch() {
       const input = document.getElementById("postcodeInput").value.trim();
       const thisToken = ++currentSearchToken;
@@ -967,19 +913,24 @@
         return;
       }
 
-      clearResultsForLoading();
+      if (!ROUTES_SHEET_CSV_URL || ROUTES_SHEET_CSV_URL.includes("PASTE_YOUR_GVIZ_CSV_URL_HERE")){
+        alert("Routes source URL not configured. Please set ROUTES_SHEET_CSV_URL to your Google Sheets GViz CSV link.");
+        return;
+      }
 
-      // Only show overlay while fetching routes (fast part). Status loads in background without blocking UI.
+      clearResultsForLoading();
       setLoading(true, "Loading route information…", "Fetching routes…", true);
 
       try{
         await bankHolidaysReady;
 
         const cleaned = normaliseInputPostcode(input);
-        const url = "routes.csv?cb=" + Date.now();
 
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to load routes.csv");
+        // Fetch routes from Google Sheets CSV endpoint (cache-bust added)
+        const routesUrl = `${ROUTES_SHEET_CSV_URL}${ROUTES_SHEET_CSV_URL.includes("?") ? "&" : "?"}cb=${Date.now()}`;
+
+        const res = await fetch(routesUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load routes");
         const text = await res.text();
 
         const routingData = parseRoutes(text);
@@ -998,7 +949,6 @@
 
         const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
 
-        // Precompute per-channel date columns (so placeholders match the final strip layout)
         const grouped = groupByChannel(matchingRows);
         const channels = Object.keys(grouped);
 
@@ -1036,29 +986,22 @@
 
         pendingStripMeta = meta;
 
-        // Render results IMMEDIATELY (route info tables + placeholder status strips)
+        // Render route info instantly + placeholder status
         buildResultsHTML(matchingRows, bestPrefix, input, pendingStripMeta);
 
-        // Hide overlay now — user can see route checker info instantly
+        // Hide overlay now
         setLoading(false, null, null, true);
 
-        // Load overrides in the background and then replace placeholders
+        // Background load live status and then update strips
         if (globalFromISO && globalToISO){
           (async () => {
             try{
               await loadOverridesForRange(globalFromISO, globalToISO);
-
-              // If user searched again while we were loading, don't update old results
               if (thisToken !== currentSearchToken) return;
-
               updateAllStatusStripsFromMeta(pendingStripMeta);
             }catch(apiErr){
-              console.warn("Route status API not available. Leaving placeholders/defaults:", apiErr);
-
-              // If API fails, still show a sensible default strip (all available / closed by rule)
+              console.warn("Route status API not available. Showing defaults:", apiErr);
               if (thisToken !== currentSearchToken) return;
-
-              // overridesMap is empty; buildStatusStripHTML will show rule-based statuses (Available/Closed/Inactive)
               updateAllStatusStripsFromMeta(pendingStripMeta);
             }
           })();
@@ -1077,9 +1020,6 @@
       if (e.key === "Enter") { e.preventDefault(); performSearch(); }
     });
 
-    // ============================================================
-    // INIT
-    // ============================================================
     (function init() {
       loadChannelRules();
 
