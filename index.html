@@ -199,8 +199,17 @@
       color: #8a5a12;
     }
 
+    /* Placeholder strip */
+    .status-loading-row{
+      height: 44px;
+      font-weight: 700;
+      font-size: 12.5px;
+      color: #444;
+      background: #fff;
+    }
+
     /* ============================================================
-       LOADING OVERLAY (smooth UX during fetch)
+       LOADING OVERLAY (only for routes fetch)
        ============================================================ */
     .loading-overlay{
       position: fixed;
@@ -266,7 +275,7 @@
     <div class="loading-panel">
       <div class="spinner" aria-hidden="true"></div>
       <p class="loading-title" id="loadingTitle">Loading…</p>
-      <p class="loading-sub" id="loadingSub">Fetching routes and live status.</p>
+      <p class="loading-sub" id="loadingSub">Fetching routes…</p>
     </div>
   </div>
 
@@ -281,7 +290,7 @@
       </div>
     </div>
 
-      <div id="noResults" class="no-results" style="display:none;">
+    <div id="noResults" class="no-results" style="display:none;">
       No routing information found for that postcode prefix.
     </div>
 
@@ -341,9 +350,9 @@
     };
 
     // ============================================================
-    // LOADING UI HELPERS (no logic change, just UX)
+    // LOADING UI HELPERS
     // ============================================================
-    function setLoading(isLoading, title, sub){
+    function setLoading(isLoading, title, sub, lockControls = true){
       const overlay = document.getElementById("loadingOverlay");
       const t = document.getElementById("loadingTitle");
       const s = document.getElementById("loadingSub");
@@ -355,13 +364,15 @@
 
       overlay.style.display = isLoading ? "flex" : "none";
 
-      // Prevent double-search spamming while we fetch
-      btn.disabled = isLoading;
-      input.disabled = isLoading;
+      // Only lock controls when fetching routes (not while status loads in background)
+      if (lockControls){
+        btn.disabled = isLoading;
+        input.disabled = isLoading;
+      }
     }
 
     function clearResultsForLoading(){
-      // Hide everything except the spinner while loading search results
+      // We clear results immediately, but we'll only show overlay while fetching routes.csv
       document.getElementById("carrierBlock").style.display = "none";
       document.getElementById("resultsMeta").style.display = "none";
       document.getElementById("resultsContainer").innerHTML = "";
@@ -563,16 +574,12 @@
       const now = new Date();
       const cutoffHour = 14; // 2pm
 
-      // Start from "today" (date only)
       let start = startOfDay(now);
 
-      // If today is NOT a working day (weekend/bank hol), ignore the clock completely.
-      // Booking day becomes the next working day.
       if (!isWorkingDay(start)) {
         return nextWorkingDay(start);
       }
 
-      // Only apply the 2pm rule on a working day
       const afterCutoff =
         (now.getHours() > cutoffHour) ||
         (now.getHours() === cutoffHour && now.getMinutes() > 0);
@@ -582,12 +589,11 @@
       return start;
     }
 
-    // Build N WORKING DAYS (exclude weekends + bank holidays), starting from a given date (inclusive if working day).
+    // Build N WORKING DAYS (exclude weekends + bank holidays), starting from a given date
     function buildWorkingDateColsFrom(startDate, n){
       const cols = [];
       let d = startOfDay(startDate);
 
-      // If somehow we're given a non-working day, move forward to the next working day
       if (!isWorkingDay(d)) d = nextWorkingDay(d);
 
       let safety = 0;
@@ -609,22 +615,15 @@
     // Carrier next dates
     function computeCarrierNextDates() {
       const start = getStartDateConsideringCutoff();
-
-      // Overnight = next working day
       const overnight = addWorkingDays(start, 1);
-
-      // 1-3 day = 3rd working day from start
       const day3 = addWorkingDays(start, 3);
 
-      const overnightEl = document.getElementById("carrierOvernightNext");
-      const day3El = document.getElementById("carrier13Next");
-
-      overnightEl.textContent = formatDayDate(overnight);
-      day3El.textContent = formatDayDate(day3);
+      document.getElementById("carrierOvernightNext").textContent = formatDayDate(overnight);
+      document.getElementById("carrier13Next").textContent = formatDayDate(day3);
     }
 
     // ============================================================
-    // CHANNEL NEXT DELIVERY CALCULATION (days + lead time + cutoff + bank hols)
+    // CHANNEL NEXT DELIVERY CALCULATION
     // ============================================================
     function findNextDeliveryDate(allowedDays, leadTimeText) {
       if (!Array.isArray(allowedDays) || allowedDays.length === 0) return null;
@@ -638,10 +637,7 @@
       let d = startOfDay(earliest);
       for (let i = 0; i < 120; i++) {
         const dayLower = weekdayName(d).toLowerCase();
-
-        // delivery date itself must be a working day (skips bank holidays)
         if (allowed.has(dayLower) && d >= earliest && isWorkingDay(d)) return d;
-
         d.setDate(d.getDate() + 1);
       }
       return null;
@@ -650,7 +646,6 @@
     // ============================================================
     // ROUTE STATUS OVERRIDES (Google Sheet via Apps Script)
     // ============================================================
-    // key: "YYYY-MM-DD||ROUTE" -> status string
     const overridesMap = new Map();
 
     function ovKey(dateISO, route){
@@ -674,7 +669,7 @@
     }
 
     // ============================================================
-    // STATUS STRIP LOGIC (View-only, channel rule wins)
+    // STATUS STRIP LOGIC (channel rule wins)
     // ============================================================
     function earliestBookableDeliveryDate(leadDays){
       const start = getStartDateConsideringCutoff();
@@ -711,7 +706,6 @@
     function buildStatusStripHTML(route, runDaysArray, leadTimeText, dateCols){
       const leadDays = parseLeadTimeWorkingDays(leadTimeText);
       const earliest = earliestBookableDeliveryDate(leadDays);
-
       const runDays = new Set((runDaysArray || []).map(d => String(d).trim().toLowerCase()).filter(Boolean));
 
       let thead = "<thead><tr>";
@@ -737,6 +731,27 @@
           <table>
             ${thead}
             ${tbody}
+          </table>
+        </div>
+      `;
+    }
+
+    function buildStatusStripPlaceholderHTML(dateCols){
+      let thead = "<thead><tr>";
+      for (const c of dateCols){
+        thead += `<th>${c.head}</th>`;
+      }
+      thead += "</tr></thead>";
+
+      return `
+        <div class="status-strip" aria-label="Route status loading (next ${dateCols.length} working days)">
+          <table>
+            ${thead}
+            <tbody>
+              <tr>
+                <td class="status-loading-row" colspan="${dateCols.length}">Loading live status…</td>
+              </tr>
+            </tbody>
           </table>
         </div>
       `;
@@ -772,7 +787,18 @@
       });
     }
 
-    function buildResultsHTML(rows, usedPrefix, originalInput) {
+    function makeSafeId(str){
+      // stable + safe for DOM ids
+      return "ch_" + btoa(unescape(encodeURIComponent(String(str))))
+        .replace(/=+$/,"")
+        .replace(/[+/]/g, "_");
+    }
+
+    // Holds latest channel strip metadata for async updates
+    let pendingStripMeta = []; // [{ channel, route, allDays, leadTime, dateCols, stripId }]
+    let currentSearchToken = 0;
+
+    function buildResultsHTML(rows, usedPrefix, originalInput, metaForStrips) {
       const grouped = groupByChannel(rows);
       const channels = Object.keys(grouped).sort();
 
@@ -792,6 +818,8 @@
       resultsMeta.textContent =
         `Results for postcode: ${originalInput || usedPrefix} (matched prefix: ${usedPrefix})`;
 
+      const metaByChannel = new Map((metaForStrips || []).map(m => [m.channel, m]));
+
       let html = "";
 
       channels.forEach(channel => {
@@ -806,11 +834,14 @@
         const nextDate = findNextDeliveryDate(allDays, leadTime);
         const nextDeliveryText = nextDate ? formatDayDate(nextDate) : "";
 
-        // Status strip starts from the channel's NEXT DELIVERY date
-        const stripStart = nextDate || getStartDateConsideringCutoff();
-        const dateColsForChannel = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+        const meta = metaByChannel.get(channel);
+        const dateColsForChannel = meta ? meta.dateCols : buildWorkingDateColsFrom(nextDate || getStartDateConsideringCutoff(), CONFIG.DAYS_AHEAD);
+        const stripId = meta ? meta.stripId : makeSafeId(channel);
 
-        const statusStripHTML = buildStatusStripHTML(route, allDays, leadTime, dateColsForChannel);
+        // IMPORTANT CHANGE:
+        // Render route info table immediately.
+        // Render a placeholder status strip that will be replaced when overrides arrive.
+        const statusStripPlaceholder = buildStatusStripPlaceholderHTML(dateColsForChannel);
 
         html += `
           <div class="channel-block">
@@ -849,13 +880,23 @@
               </tbody>
             </table>
 
-            ${statusStripHTML}
+            <div id="${stripId}">
+              ${statusStripPlaceholder}
+            </div>
           </div>
         `;
       });
 
       resultsContainer.innerHTML = html;
       attachChannelRuleEvents();
+    }
+
+    function updateAllStatusStripsFromMeta(metaForStrips){
+      for (const m of (metaForStrips || [])){
+        const host = document.getElementById(m.stripId);
+        if (!host) continue;
+        host.innerHTML = buildStatusStripHTML(m.route, m.allDays, m.leadTime, m.dateCols);
+      }
     }
 
     // ============================================================
@@ -913,10 +954,11 @@
     }
 
     // ============================================================
-    // SEARCH HANDLING (FETCH ROUTES ON EACH SEARCH)
+    // SEARCH HANDLING
     // ============================================================
     async function performSearch() {
       const input = document.getElementById("postcodeInput").value.trim();
+      const thisToken = ++currentSearchToken;
 
       if (!input) {
         showLandingCarrier();
@@ -925,12 +967,12 @@
         return;
       }
 
-      // Make UX smooth: clear old results + show spinner immediately
       clearResultsForLoading();
-      setLoading(true, "Loading route information…", "Fetching routes and live status.");
+
+      // Only show overlay while fetching routes (fast part). Status loads in background without blocking UI.
+      setLoading(true, "Loading route information…", "Fetching routes…", true);
 
       try{
-        // ensure bank holidays are loaded before calculating next-delivery dates
         await bankHolidaysReady;
 
         const cleaned = normaliseInputPostcode(input);
@@ -944,62 +986,87 @@
         const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
 
         if (!bestPrefix) {
-          setLoading(false);
+          setLoading(false, null, null, true);
 
-          // keep carrier visible if no match
           showLandingCarrier();
           document.getElementById("noResults").style.display = "block";
           document.getElementById("noResults").textContent = "No routing information found for that postcode prefix.";
           return;
         }
 
-        // valid match: hide landing carrier and show results
         hideLandingCarrier();
 
         const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
 
-        // Load overrides once for a range that covers all per-channel status windows
+        // Precompute per-channel date columns (so placeholders match the final strip layout)
         const grouped = groupByChannel(matchingRows);
         const channels = Object.keys(grouped);
 
+        const meta = [];
         let globalFromISO = null;
         let globalToISO = null;
 
         for (const channel of channels){
           const rowsForChannel = grouped[channel];
-
+          const route = rowsForChannel[0].route;
           const leadTime = rowsForChannel[0].leadTime;
           const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
 
           const nextDate = findNextDeliveryDate(allDays, leadTime);
           const stripStart = nextDate || getStartDateConsideringCutoff();
-          const cols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+          const dateCols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
 
-          if (cols.length){
-            const fromISO = cols[0].iso;
-            const toISO = cols[cols.length - 1].iso;
+          if (dateCols.length){
+            const fromISO = dateCols[0].iso;
+            const toISO = dateCols[dateCols.length - 1].iso;
 
             if (!globalFromISO || fromISO < globalFromISO) globalFromISO = fromISO;
             if (!globalToISO || toISO > globalToISO) globalToISO = toISO;
           }
+
+          meta.push({
+            channel,
+            route,
+            allDays,
+            leadTime,
+            dateCols,
+            stripId: makeSafeId(channel)
+          });
         }
 
+        pendingStripMeta = meta;
+
+        // Render results IMMEDIATELY (route info tables + placeholder status strips)
+        buildResultsHTML(matchingRows, bestPrefix, input, pendingStripMeta);
+
+        // Hide overlay now — user can see route checker info instantly
+        setLoading(false, null, null, true);
+
+        // Load overrides in the background and then replace placeholders
         if (globalFromISO && globalToISO){
-          try{
-            setLoading(true, "Loading live route status…", "Almost there.");
-            await loadOverridesForRange(globalFromISO, globalToISO);
-          }catch(apiErr){
-            console.warn("Route status API not available. Showing defaults:", apiErr);
-          }
+          (async () => {
+            try{
+              await loadOverridesForRange(globalFromISO, globalToISO);
+
+              // If user searched again while we were loading, don't update old results
+              if (thisToken !== currentSearchToken) return;
+
+              updateAllStatusStripsFromMeta(pendingStripMeta);
+            }catch(apiErr){
+              console.warn("Route status API not available. Leaving placeholders/defaults:", apiErr);
+
+              // If API fails, still show a sensible default strip (all available / closed by rule)
+              if (thisToken !== currentSearchToken) return;
+
+              // overridesMap is empty; buildStatusStripHTML will show rule-based statuses (Available/Closed/Inactive)
+              updateAllStatusStripsFromMeta(pendingStripMeta);
+            }
+          })();
         }
-
-        buildResultsHTML(matchingRows, bestPrefix, input);
-
-        setLoading(false);
 
       }catch(err){
         console.error("Error during search:", err);
-        setLoading(false);
+        setLoading(false, null, null, true);
         showLandingCarrier();
         alert("Routing data is not available at the moment. Please try again in a moment or contact the system owner.");
       }
@@ -1014,29 +1081,21 @@
     // INIT
     // ============================================================
     (function init() {
-      // Load channel rules in background
       loadChannelRules();
 
-      // Disable search until bank holidays are ready (prevents wrong next-delivery values)
       const btn = document.getElementById("searchButton");
       btn.disabled = true;
 
       bankHolidaysReady = loadBankHolidays().finally(() => {
         btn.disabled = false;
 
-        // Now we can compute landing Carrier dates accurately
         computeCarrierNextDates();
-
-        // Keep Carrier dates accurate if tab stays open across 2pm / date change
         setInterval(computeCarrierNextDates, 60 * 1000);
         window.addEventListener("focus", computeCarrierNextDates);
       });
 
-      // Show landing carrier at start
       showLandingCarrier();
     })();
   </script>
 </body>
 </html>
-
-
