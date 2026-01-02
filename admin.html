@@ -674,7 +674,7 @@
   <script>
     const CONFIG = {
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
-      ROUTES_CSV_URL: "./routes.csv",
+      ROUTES_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRH6-jQDjHdpThiVhGe1mwrfOD_QRYbYYlCx8Mo1HvA-vLxudRTnpJMRWEZlyxGE-f9OXtnQBGDWoLB/pub?gid=0&single=true&output=csv",
       BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
       DAYS_AHEAD: 10,
 
@@ -1064,25 +1064,28 @@
 
     // ---------- Load schedule & build tooltip groups from routes.csv ----------
     async function loadScheduleFromCSV(){
-      const res = await fetch(CONFIG.ROUTES_CSV_URL + "?cb=" + Date.now(), { cache:"no-store" });
-      if (!res.ok) throw new Error(`Failed to load routes.csv (${res.status})`);
+      const res = await fetch(
+  CONFIG.ROUTES_CSV_URL + (CONFIG.ROUTES_CSV_URL.includes("?") ? "&" : "?") + "cb=" + Date.now(),
+  { cache:"no-store" }
+);
+      if (!res.ok) throw new Error(`Failed to load Routes sheet (${res.status})`);
 
       const text = await res.text();
       const rows = parseDelimitedSmart(text);
-      if (rows.length < 2) throw new Error("routes.csv has no data rows");
+      if (rows.length < 2) throw new Error("Routes sheet has no data rows");
 
       const headers = rows[0].map(normaliseHeader);
 
       const routeIdx = headers.findIndex(h =>
         h === "route" || h === "routename" || h === "route name" || h === "routecode" || h === "route_code"
       );
-      if (routeIdx === -1) throw new Error("routes.csv must include a 'Route' column");
+      if (routeIdx === -1) throw new Error("Routes sheet must include a 'Route' column");
 
       const prefixIdx = headers.findIndex(h => h === "prefix");
-      if (prefixIdx === -1) throw new Error("routes.csv must include a 'prefix' column (postcode prefix/district).");
+      if (prefixIdx === -1) throw new Error("Routes sheet must include a 'prefix' column (postcode prefix/district).");
 
       const channelIdx = headers.findIndex(h => h === "channel" || h === "routechannel");
-      if (channelIdx === -1) throw new Error("routes.csv must include a 'channel' column.");
+      if (channelIdx === -1) throw new Error("Routes sheet must include a 'channel' column.");
 
       const dayCols = new Map();
       headers.forEach((h,i)=>{
@@ -1130,7 +1133,7 @@
             const existing = schedule.get(route);
             if (!setsEqual(existing, days)){
               console.warn(
-                `[routes.csv] Conflicting schedules for route "${route}" on row ${r+1}. Keeping first.`,
+                `[Routes sheet] Conflicting schedules for route "${route}" on row ${r+1}. Keeping first.`,
                 { existing: weekdaysToText(existing), incoming: weekdaysToText(days), row: row }
               );
               // Keep existing schedule
@@ -1145,7 +1148,7 @@
 
       if (schedule.size === 0){
         throw new Error(
-          `No route schedules inferred from routes.csv for channel "${CONFIG.COMPONENT_CHANNEL_NAME}".`
+          `No route schedules inferred from Routes sheet for channel "${CONFIG.COMPONENT_CHANNEL_NAME}".`
         );
       }
 
@@ -1730,5 +1733,6 @@
   </script>
 </body>
 </html>
+
 
 
