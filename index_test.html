@@ -21,6 +21,21 @@
       position: relative;
     }
 
+    /* Top-right link */
+    .top-link {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #0078d4;
+      text-decoration: underline;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .top-link:hover { color: #005ea3; }
+
     .search-section {
       display: flex;
       flex-wrap: wrap;
@@ -129,14 +144,17 @@
       display: none;
     }
 
+    /* ============================================================
+       ROUTE STATUS STRIP (View-only) — softened colours
+       ============================================================ */
     :root{
       --border:#cfcfcf;
       --header:#f0f0f0;
       --inactive:#f7f7f7;
 
-      --green:#dff3e6;
-      --red:#f7d6d6;
-      --orange:#fde8c8;
+      --green:#dff3e6;    /* light mint */
+      --red:#f7d6d6;      /* light rose */
+      --orange:#fde8c8;   /* light amber */
     }
 
     .status-strip{
@@ -195,14 +213,9 @@
       color: #8a5a12;
     }
 
-    .status-loading-row{
-      height: 44px;
-      font-weight: 700;
-      font-size: 12.5px;
-      color: #444;
-      background: #fff;
-    }
-
+    /* ============================================================
+       LOADING OVERLAY (smooth UX during fetch)
+       ============================================================ */
     .loading-overlay{
       position: fixed;
       inset: 0;
@@ -246,31 +259,183 @@
       line-height: 1.35;
     }
 
+    /* ============================================================
+       ROUTES STATUS OVERLAY (VIEW-ONLY FULL GRID)
+       ============================================================ */
+    .routesOverlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 100000; /* above loading overlay */
+      display: none;
+      align-items: stretch;
+      justify-content: stretch;
+      padding: 18px;
+    }
+    .routesOverlayPanel{
+      width: 100%;
+      height: 100%;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .routesOverlayHeader{
+      padding: 14px 16px;
+      background: #f7f7f7;
+      border-bottom: 1px solid #e5e5e5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .routesOverlayTitle{
+      font-size: 16px;
+      font-weight: 800;
+      margin: 0;
+    }
+    .routesOverlayActions{
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .routesOverlayLink{
+      font-size: 13px;
+      font-weight: 800;
+      color: #0078d4;
+      text-decoration: underline;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .routesOverlayLink:hover{ color:#005ea3; }
+
+    .routesOverlayBody{
+      padding: 12px 12px;
+      overflow: auto;
+      background: #fafafa;
+      flex: 1;
+    }
+
+    .routesGridWrap{
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .routesGrid{
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .routesGrid th, .routesGrid td{
+      border: 1px solid #ddd;
+      height: 44px;
+      padding: 0;
+      text-align: center;
+      vertical-align: middle;
+      font-weight: 700;
+      font-size: 12.5px;
+    }
+
+    .routesGrid thead th{
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      background: var(--header);
+      font-weight: 800;
+      font-size: 13px;
+      padding: 6px 8px;
+      line-height: 1.15;
+    }
+
+    .routesGrid .routeHead{
+      position: sticky;
+      left: 0;
+      z-index: 40;
+      text-align: left;
+      padding: 6px 10px;
+      background: var(--header);
+      font-size: 13px;
+      font-weight: 800;
+      width: 260px;
+    }
+
+    .routesGrid .routeCell{
+      position: sticky;
+      left: 0;
+      z-index: 20;
+      text-align: left;
+      padding: 6px 10px;
+      background: #e6e6e6;
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .routesGrid .statusCellText{
+      padding: 0 6px;
+      line-height: 1.1;
+    }
+
     @media (max-width: 600px) {
       .search-section { flex-direction: column; align-items: flex-start; }
       .search-input-wrapper { width: 100%; }
       button { width: 100%; }
-
-      .status-strip th,
-      .status-strip td{
-        padding: 7px 4px;
-        font-size: 12px;
-      }
-      .status-strip .statusCell{ font-size: 12px; }
+      .top-link { top: 12px; right: 12px; }
+      .routesGrid .routeHead, .routesGrid .routeCell { width: 210px; }
     }
   </style>
 </head>
 
 <body>
+  <!-- LOADING OVERLAY -->
   <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true">
     <div class="loading-panel">
       <div class="spinner" aria-hidden="true"></div>
       <p class="loading-title" id="loadingTitle">Loading…</p>
-      <p class="loading-sub" id="loadingSub">Fetching routes…</p>
+      <p class="loading-sub" id="loadingSub">Fetching routes and live status.</p>
+    </div>
+  </div>
+
+  <!-- ROUTES STATUS OVERLAY (VIEW ONLY) -->
+  <div id="routesStatusOverlay" class="routesOverlay" aria-modal="true" role="dialog">
+    <div class="routesOverlayPanel">
+      <div class="routesOverlayHeader">
+        <p class="routesOverlayTitle">Routes Status (view only)</p>
+        <div class="routesOverlayActions">
+          <span class="routesOverlayLink" id="routesStatusRefresh">Refresh</span>
+          <span class="routesOverlayLink" id="routesStatusClose">Close</span>
+        </div>
+      </div>
+
+      <div class="routesOverlayBody">
+        <div style="font-size:13px;color:#333;margin:0 0 10px;line-height:1.35">
+          Showing the next <b>10 working days</b> (excluding weekends and UK bank holidays), with the current status per route.
+        </div>
+
+        <div class="routesGridWrap">
+          <table class="routesGrid" id="routesStatusGrid"></table>
+        </div>
+
+        <div id="routesStatusMsg" style="margin-top:10px;font-size:13px;color:#333"></div>
+      </div>
     </div>
   </div>
 
   <div class="container">
+    <span id="routesStatusLink" class="top-link" role="button" tabindex="0">Routes Status</span>
+
     <h1>Transport Route Checker</h1>
 
     <div class="search-section">
@@ -285,6 +450,7 @@
       No routing information found for that postcode prefix.
     </div>
 
+    <!-- LANDING: Carrier table shows before any successful search -->
     <div id="carrierBlock" class="channel-block" style="display:block;">
       <div class="channel-header">
         <div class="channel-title">Carrier</div>
@@ -324,15 +490,18 @@
 
   <script>
     // ============================================================
-    // CONFIG
+    // CONFIG (Route Status API)
     // ============================================================
     const CONFIG = {
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
-      DAYS_AHEAD: 10
+      DAYS_AHEAD: 10,
+
+      // Used for the full-grid overlay schedule inference (same assumption as admin page)
+      COMPONENT_CHANNEL_NAME: "Component Channel"
     };
 
     // ============================================================
-    // ROUTES SOURCE (Google Sheets CSV)
+    // ROUTES SOURCE (Google Sheets - published CSV)
     // ============================================================
     const ROUTES_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRH6-jQDjHdpThiVhGe1mwrfOD_QRYbYYlCx8Mo1HvA-vLxudRTnpJMRWEZlyxGE-f9OXtnQBGDWoLB/pub?gid=0&single=true&output=csv";
 
@@ -343,7 +512,10 @@
       CLOSED: "Closed"
     };
 
-    function setLoading(isLoading, title, sub, lockControls = true){
+    // ============================================================
+    // LOADING UI HELPERS (for searches)
+    // ============================================================
+    function setLoading(isLoading, title, sub){
       const overlay = document.getElementById("loadingOverlay");
       const t = document.getElementById("loadingTitle");
       const s = document.getElementById("loadingSub");
@@ -355,10 +527,8 @@
 
       overlay.style.display = isLoading ? "flex" : "none";
 
-      if (lockControls){
-        btn.disabled = isLoading;
-        input.disabled = isLoading;
-      }
+      btn.disabled = isLoading;
+      input.disabled = isLoading;
     }
 
     function clearResultsForLoading(){
@@ -368,6 +538,9 @@
       document.getElementById("noResults").style.display = "none";
     }
 
+    // ============================================================
+    // DELIMITER-DETECTING PARSER (comma CSV or tab TSV)
+    // ============================================================
     function stripBom(s) {
       return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
     }
@@ -399,6 +572,9 @@
       return { headers, rows };
     }
 
+    // ============================================================
+    // CHANNEL RULES (LOADED FROM channel_rules.csv)
+    // ============================================================
     let channelRules = {};
 
     function loadChannelRules() {
@@ -428,7 +604,10 @@
         });
     }
 
-    let bankHolidaySet = new Set();
+    // ============================================================
+    // BANK HOLIDAYS (LOADED FROM bank_holidays.csv)
+    // ============================================================
+    let bankHolidaySet = new Set(); // ISO YYYY-MM-DD
     let bankHolidaysReady = Promise.resolve();
 
     function toISODateKey(dateObj) {
@@ -463,6 +642,9 @@
         });
     }
 
+    // ============================================================
+    // ROUTES PARSING (routes data can be comma or tab separated)
+    // ============================================================
     function normalisePrefix(v) {
       return String(v || "").toUpperCase().replace(/\s+/g, "").trim();
     }
@@ -486,6 +668,9 @@
       }).filter(r => r.prefix && r.channel);
     }
 
+    // ============================================================
+    // WORKING DAY + CUTOFF HELPERS
+    // ============================================================
     function parseLeadTimeWorkingDays(leadTimeText) {
       const t = String(leadTimeText || "").toLowerCase();
       const m = t.match(/(\d+)/);
@@ -496,7 +681,7 @@
     }
 
     function isWorkingDay(dateObj) {
-      const day = dateObj.getDay();
+      const day = dateObj.getDay(); // 0 Sun ... 6 Sat
       if (day === 0 || day === 6) return false;
       const iso = toISODateKey(dateObj);
       if (bankHolidaySet.has(iso)) return false;
@@ -546,7 +731,7 @@
 
     function getStartDateConsideringCutoff() {
       const now = new Date();
-      const cutoffHour = 14;
+      const cutoffHour = 14; // 2pm
 
       let start = startOfDay(now);
 
@@ -563,6 +748,7 @@
       return start;
     }
 
+    // Build N WORKING DAYS (exclude weekends + bank holidays), starting from a given date (inclusive if working day).
     function buildWorkingDateColsFrom(startDate, n){
       const cols = [];
       let d = startOfDay(startDate);
@@ -585,8 +771,10 @@
       return cols;
     }
 
+    // Carrier next dates
     function computeCarrierNextDates() {
       const start = getStartDateConsideringCutoff();
+
       const overnight = addWorkingDays(start, 1);
       const day3 = addWorkingDays(start, 3);
 
@@ -594,6 +782,9 @@
       document.getElementById("carrier13Next").textContent = formatDayDate(day3);
     }
 
+    // ============================================================
+    // CHANNEL NEXT DELIVERY CALCULATION
+    // ============================================================
     function findNextDeliveryDate(allowedDays, leadTimeText) {
       if (!Array.isArray(allowedDays) || allowedDays.length === 0) return null;
 
@@ -612,6 +803,9 @@
       return null;
     }
 
+    // ============================================================
+    // ROUTE STATUS OVERRIDES (Google Sheet via Apps Script)
+    // ============================================================
     const overridesMap = new Map();
 
     function ovKey(dateISO, route){
@@ -634,6 +828,9 @@
       }
     }
 
+    // ============================================================
+    // STATUS STRIP LOGIC (View-only, channel rule wins)
+    // ============================================================
     function earliestBookableDeliveryDate(leadDays){
       const start = getStartDateConsideringCutoff();
       return (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
@@ -669,6 +866,7 @@
     function buildStatusStripHTML(route, runDaysArray, leadTimeText, dateCols){
       const leadDays = parseLeadTimeWorkingDays(leadTimeText);
       const earliest = earliestBookableDeliveryDate(leadDays);
+
       const runDays = new Set((runDaysArray || []).map(d => String(d).trim().toLowerCase()).filter(Boolean));
 
       let thead = "<thead><tr>";
@@ -699,27 +897,9 @@
       `;
     }
 
-    function buildStatusStripPlaceholderHTML(dateCols){
-      let thead = "<thead><tr>";
-      for (const c of dateCols){
-        thead += `<th>${c.head}</th>`;
-      }
-      thead += "</tr></thead>";
-
-      return `
-        <div class="status-strip" aria-label="Route status loading (next ${dateCols.length} working days)">
-          <table>
-            ${thead}
-            <tbody>
-              <tr>
-                <td class="status-loading-row" colspan="${dateCols.length}">Loading live status…</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      `;
-    }
-
+    // ============================================================
+    // CORE HELPERS
+    // ============================================================
     function normaliseInputPostcode(raw) {
       return raw ? raw.toUpperCase().replace(/\s+/g, "") : "";
     }
@@ -747,6 +927,9 @@
       });
     }
 
+    // ============================================================
+    // ASYNC STATUS LOADING (instant route table, status loads after)
+    // ============================================================
     function makeSafeId(str){
       return "ch_" + btoa(unescape(encodeURIComponent(String(str))))
         .replace(/=+$/,"")
@@ -755,6 +938,35 @@
 
     let pendingStripMeta = [];
     let currentSearchToken = 0;
+
+    function buildStatusStripPlaceholderHTML(dateCols){
+      let thead = "<thead><tr>";
+      for (const c of dateCols){
+        thead += `<th>${c.head}</th>`;
+      }
+      thead += "</tr></thead>";
+
+      return `
+        <div class="status-strip" aria-label="Route status loading (next ${dateCols.length} working days)">
+          <table>
+            ${thead}
+            <tbody>
+              <tr>
+                <td class="inactiveCell statusCell" colspan="${dateCols.length}">Loading live status…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function updateAllStatusStripsFromMeta(metaForStrips){
+      for (const m of (metaForStrips || [])){
+        const host = document.getElementById(m.stripId);
+        if (!host) continue;
+        host.innerHTML = buildStatusStripHTML(m.route, m.allDays, m.leadTime, m.dateCols);
+      }
+    }
 
     function buildResultsHTML(rows, usedPrefix, originalInput, metaForStrips) {
       const grouped = groupByChannel(rows);
@@ -826,11 +1038,11 @@
               </thead>
               <tbody>
                 <tr>
-                  <td>${route}</td>
-                  <td>${allDays.join(", ")}</td>
-                  <td>${serviceType}</td>
-                  <td class="lead-time">${leadTime}</td>
-                  <td class="lead-time">${nextDeliveryText}</td>
+                  <td>${escapeHTML(route)}</td>
+                  <td>${escapeHTML(allDays.join(", "))}</td>
+                  <td>${escapeHTML(serviceType)}</td>
+                  <td class="lead-time">${escapeHTML(leadTime)}</td>
+                  <td class="lead-time">${escapeHTML(nextDeliveryText)}</td>
                 </tr>
               </tbody>
             </table>
@@ -846,14 +1058,9 @@
       attachChannelRuleEvents();
     }
 
-    function updateAllStatusStripsFromMeta(metaForStrips){
-      for (const m of (metaForStrips || [])){
-        const host = document.getElementById(m.stripId);
-        if (!host) continue;
-        host.innerHTML = buildStatusStripHTML(m.route, m.allDays, m.leadTime, m.dateCols);
-      }
-    }
-
+    // ============================================================
+    // TOOLTIP HANDLING
+    // ============================================================
     function attachChannelRuleEvents() {
       const triggers = document.querySelectorAll(".channel-rules-trigger");
       const tooltip = document.getElementById("channelTooltip");
@@ -891,6 +1098,9 @@
       });
     }
 
+    // ============================================================
+    // LANDING / VISIBILITY CONTROL
+    // ============================================================
     function showLandingCarrier() {
       document.getElementById("carrierBlock").style.display = "block";
       document.getElementById("resultsMeta").style.display = "none";
@@ -902,6 +1112,9 @@
       document.getElementById("carrierBlock").style.display = "none";
     }
 
+    // ============================================================
+    // SEARCH HANDLING
+    // ============================================================
     async function performSearch() {
       const input = document.getElementById("postcodeInput").value.trim();
       const thisToken = ++currentSearchToken;
@@ -913,31 +1126,24 @@
         return;
       }
 
-      if (!ROUTES_SHEET_CSV_URL || ROUTES_SHEET_CSV_URL.includes("PASTE_YOUR_GVIZ_CSV_URL_HERE")){
-        alert("Routes source URL not configured. Please set ROUTES_SHEET_CSV_URL to your Google Sheets GViz CSV link.");
-        return;
-      }
-
       clearResultsForLoading();
-      setLoading(true, "Loading route information…", "Fetching routes…", true);
+      setLoading(true, "Loading route information…", "Fetching routes…");
 
       try{
         await bankHolidaysReady;
 
         const cleaned = normaliseInputPostcode(input);
 
-        // Fetch routes from Google Sheets CSV endpoint (cache-bust added)
         const routesUrl = `${ROUTES_SHEET_CSV_URL}${ROUTES_SHEET_CSV_URL.includes("?") ? "&" : "?"}cb=${Date.now()}`;
-
         const res = await fetch(routesUrl, { cache: "no-store" });
-        if (!res.ok) throw new Error("Failed to load routes");
+        if (!res.ok) throw new Error("Failed to load routes from Google Sheets");
         const text = await res.text();
 
         const routingData = parseRoutes(text);
         const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
 
         if (!bestPrefix) {
-          setLoading(false, null, null, true);
+          setLoading(false);
 
           showLandingCarrier();
           document.getElementById("noResults").style.display = "block";
@@ -949,6 +1155,7 @@
 
         const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
 
+        // Precompute strip date columns per channel for instant render
         const grouped = groupByChannel(matchingRows);
         const channels = Object.keys(grouped);
 
@@ -986,13 +1193,13 @@
 
         pendingStripMeta = meta;
 
-        // Render route info instantly + placeholder status
+        // Render route info immediately + placeholders
         buildResultsHTML(matchingRows, bestPrefix, input, pendingStripMeta);
 
         // Hide overlay now
-        setLoading(false, null, null, true);
+        setLoading(false);
 
-        // Background load live status and then update strips
+        // Background load live status then update strips
         if (globalFromISO && globalToISO){
           (async () => {
             try{
@@ -1009,7 +1216,7 @@
 
       }catch(err){
         console.error("Error during search:", err);
-        setLoading(false, null, null, true);
+        setLoading(false);
         showLandingCarrier();
         alert("Routing data is not available at the moment. Please try again in a moment or contact the system owner.");
       }
@@ -1020,6 +1227,193 @@
       if (e.key === "Enter") { e.preventDefault(); performSearch(); }
     });
 
+    // ============================================================
+    // ROUTES STATUS OVERLAY (FULL GRID VIEW-ONLY)
+    // ============================================================
+    const routesStatusOverlayEl = document.getElementById("routesStatusOverlay");
+    const routesStatusGridEl = document.getElementById("routesStatusGrid");
+    const routesStatusMsgEl = document.getElementById("routesStatusMsg");
+
+    function escapeHTML(s){
+      return String(s ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function openRoutesStatusOverlay(){
+      routesStatusOverlayEl.style.display = "flex";
+      document.body.style.overflow = "hidden";
+      loadRoutesStatusOverlay(); // load on open
+    }
+
+    function closeRoutesStatusOverlay(){
+      routesStatusOverlayEl.style.display = "none";
+      document.body.style.overflow = "";
+    }
+
+    function weekdayIndexFromName(name){
+      const n = String(name||"").trim().toLowerCase();
+      const map = {
+        "sun":0,"sunday":0,
+        "mon":1,"monday":1,
+        "tue":2,"tues":2,"tuesday":2,
+        "wed":3,"wednesday":3,
+        "thu":4,"thur":4,"thurs":4,"thursday":4,
+        "fri":5,"friday":5,
+        "sat":6,"saturday":6
+      };
+      return (n in map) ? map[n] : null;
+    }
+
+    function parseDaysToWeekdaySet(daysArray){
+      const set = new Set();
+      for (const d of (daysArray || [])){
+        const idx = weekdayIndexFromName(d);
+        if (idx !== null) set.add(idx);
+      }
+      return set;
+    }
+
+    async function loadRoutesStatusOverlay(){
+      routesStatusMsgEl.textContent = "";
+      routesStatusGridEl.innerHTML = "";
+
+      try{
+        // Lightweight: do not block the page with the big loading overlay.
+        routesStatusMsgEl.textContent = "Loading…";
+
+        await bankHolidaysReady;
+
+        // Load routes (same source as route checker)
+        const routesUrl = `${ROUTES_SHEET_CSV_URL}${ROUTES_SHEET_CSV_URL.includes("?") ? "&" : "?"}cb=${Date.now()}`;
+        const res = await fetch(routesUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load routes");
+        const text = await res.text();
+
+        const allRows = parseRoutes(text);
+
+        // Filter to a single channel (matches admin behaviour/assumption)
+        const targetChannel = String(CONFIG.COMPONENT_CHANNEL_NAME || "").trim().toLowerCase();
+        const usable = allRows.filter(r => String(r.channel || "").trim().toLowerCase() === targetChannel);
+
+        // Build schedule per route (unique routes)
+        const schedule = new Map(); // route -> Set(weekdayIdx)
+        for (const r of usable){
+          const route = String(r.route || "").trim();
+          if (!route) continue;
+          if (route.toUpperCase().startsWith("3PLCO")) continue;
+          if (route.length <= 5) continue;
+
+          const incoming = parseDaysToWeekdaySet(r.days);
+          if (!incoming.size) continue;
+
+          if (!schedule.has(route)){
+            schedule.set(route, incoming);
+          } else {
+            // keep first; if conflicts exist, keep first (same idea as admin)
+          }
+        }
+
+        const routes = Array.from(schedule.keys())
+          .sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
+
+        if (!routes.length){
+          routesStatusMsgEl.textContent = "No routes found for the overlay view (check the sheet channel name).";
+          return;
+        }
+
+        // Build overlay date columns like admin: next N working days starting from today (no 2pm cutoff)
+        const today = new Date();
+        const dateCols = buildWorkingDateColsFrom(today, CONFIG.DAYS_AHEAD);
+
+        if (!dateCols.length){
+          routesStatusMsgEl.textContent = "No working days available to display.";
+          return;
+        }
+
+        // Load overrides for this window
+        const fromISO = dateCols[0].iso;
+        const toISO = dateCols[dateCols.length - 1].iso;
+
+        try{
+          await loadOverridesForRange(fromISO, toISO);
+        }catch(apiErr){
+          console.warn("Route status API not available for overlay. Showing defaults:", apiErr);
+        }
+
+        // Build the grid
+        let thead = `<thead><tr>`;
+        thead += `<th class="routeHead">Route</th>`;
+        for (const c of dateCols){
+          thead += `<th>${c.head}</th>`;
+        }
+        thead += `</tr></thead>`;
+
+        let tbody = `<tbody>`;
+        for (const route of routes){
+          tbody += `<tr>`;
+          tbody += `<td class="routeCell" title="${escapeHTML(route)}">${escapeHTML(route)}</td>`;
+
+          const runDays = schedule.get(route) || new Set();
+
+          for (const c of dateCols){
+            const runs = runDays.has(c.weekday);
+
+            if (!runs){
+              tbody += `<td class="inactiveCell"><span class="statusCellText"></span></td>`;
+              continue;
+            }
+
+            const ov = overridesMap.get(ovKey(c.iso, route));
+
+            if (ov === STATUS.FULL_WEIGHT){
+              tbody += `<td class="fullWeightCell"><span class="statusCellText">${escapeHTML(STATUS.FULL_WEIGHT)}</span></td>`;
+            } else if (ov === STATUS.FULL_DROPS){
+              tbody += `<td class="fullDropsCell"><span class="statusCellText">${escapeHTML(STATUS.FULL_DROPS)}</span></td>`;
+            } else {
+              // Default to Available on run days
+              tbody += `<td class="availableCell"><span class="statusCellText">${escapeHTML(STATUS.AVAILABLE)}</span></td>`;
+            }
+          }
+
+          tbody += `</tr>`;
+        }
+        tbody += `</tbody>`;
+
+        routesStatusGridEl.innerHTML = thead + tbody;
+        routesStatusMsgEl.textContent = "Loaded.";
+
+      }catch(err){
+        console.error(err);
+        routesStatusMsgEl.textContent = "Error loading route status view. Please try again.";
+      }
+    }
+
+    // Overlay events
+    document.getElementById("routesStatusLink").addEventListener("click", openRoutesStatusOverlay);
+    document.getElementById("routesStatusLink").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") openRoutesStatusOverlay();
+    });
+
+    document.getElementById("routesStatusClose").addEventListener("click", closeRoutesStatusOverlay);
+    document.getElementById("routesStatusRefresh").addEventListener("click", loadRoutesStatusOverlay);
+
+    routesStatusOverlayEl.addEventListener("click", (e) => {
+      if (e.target === routesStatusOverlayEl) closeRoutesStatusOverlay();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (routesStatusOverlayEl.style.display === "flex" && e.key === "Escape"){
+        closeRoutesStatusOverlay();
+      }
+    });
+
+    // ============================================================
+    // INIT
+    // ============================================================
     (function init() {
       loadChannelRules();
 
