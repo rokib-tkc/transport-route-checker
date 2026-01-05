@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Transport Route Checker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; font-family: Arial, sans-serif; }
+
+    body { margin: 0; padding: 20px; background: #f5f5f5; color: #222; }
+
+    h1 { margin-top: 0; font-size: 24px; text-align: center; }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      position: relative;
+    }
+
+    .search-section {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .search-section label { font-weight: bold; }
+
+    .search-input-wrapper {
+      flex: 1 1 200px;
+      display: flex;
+      gap: 8px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 14px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      background: #0078d4;
+      color: #fff;
+    }
+    button:hover { background: #005ea3; }
+    button:disabled { background: #9bbbd7; cursor: not-allowed; }
+
+    .results-header { margin-top: 10px; font-size: 14px; font-weight: bold; }
+
+    .no-results {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 13px;
+      background: #ffe5e5;
+      color: #a00;
+    }
+
+    .channel-block {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 8px;
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+    }
+
+    .channel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+
+    .channel-title { font-size: 16px; font-weight: bold; }
+
+    .channel-rules-trigger {
+      font-size: 12px;
+      color: #0078d4;
+      text-decoration: underline;
+      cursor: help;
+      white-space: nowrap;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 5px;
+      font-size: 13px;
+      table-layout: fixed;
+      background: #fff;
+    }
+
+    th, td {
+      padding: 6px 8px;
+      border: 1px solid #ddd;
+      text-align: left;
+      overflow-wrap: break-word;
+    }
+
+    th { background: #f0f0f0; font-weight: bold; }
+
+    .lead-time { white-space: nowrap; }
+
+    #channelTooltip {
+      position: fixed;
+      z-index: 9999;
+      max-width: 320px;
+      padding: 10px;
+      background: #ffffff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      font-size: 12px;
+      line-height: 1.4;
+      display: none;
+    }
+
+    :root{
+      --border:#cfcfcf;
+      --header:#f0f0f0;
+      --inactive:#f7f7f7;
+
+      --green:#dff3e6;
+      --red:#f7d6d6;
+      --orange:#fde8c8;
+    }
+
+    .status-strip{
+      margin-top: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .status-strip table{
+      margin-top: 0;
+      border: 0;
+      font-size: 13px;
+    }
+
+    .status-strip th,
+    .status-strip td{
+      border: 1px solid #ddd;
+      height: 44px;
+      padding: 0;
+      text-align: center;
+      vertical-align: middle;
+      line-height: 1.15;
+      word-break: break-word;
+    }
+
+    .status-strip thead th{
+      background: var(--header);
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .status-strip .statusCell{
+      font-weight: 700;
+      font-size: 12.5px;
+    }
+
+    .inactiveCell{
+      background: var(--inactive);
+      color: #555;
+    }
+
+    .availableCell{
+      background: var(--green);
+      color: #1f6b3a;
+    }
+
+    .fullWeightCell{
+      background: var(--red);
+      color: #8a1f1f;
+    }
+
+    .fullDropsCell{
+      background: var(--orange);
+      color: #8a5a12;
+    }
+
+    .status-loading-row{
+      height: 44px;
+      font-weight: 700;
+      font-size: 12.5px;
+      color: #444;
+      background: #fff;
+    }
+
+    .loading-overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      padding: 20px;
+    }
+    .loading-panel{
+      width: 100%;
+      max-width: 360px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+      padding: 16px 18px;
+      text-align: center;
+    }
+    .spinner{
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 5px solid #d9d9d9;
+      border-top-color: #0078d4;
+      margin: 0 auto 12px;
+      animation: spin 0.85s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-title{
+      font-size: 14px;
+      font-weight: 700;
+      margin: 0 0 4px;
+      color: #111;
+    }
+    .loading-sub{
+      font-size: 12.5px;
+      margin: 0;
+      color: #444;
+      line-height: 1.35;
+    }
+
+    @media (max-width: 600px) {
+      .search-section { flex-direction: column; align-items: flex-start; }
+      .search-input-wrapper { width: 100%; }
+      button { width: 100%; }
+
+      .status-strip th,
+      .status-strip td{
+        padding: 7px 4px;
+        font-size: 12px;
+      }
+      .status-strip .statusCell{ font-size: 12px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true">
+    <div class="loading-panel">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="loading-title" id="loadingTitle">Loading…</p>
+      <p class="loading-sub" id="loadingSub">Fetching routes…</p>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1>Transport Route Checker</h1>
+
+    <div class="search-section">
+      <label for="postcodeInput">Postcode prefix:</label>
+      <div class="search-input-wrapper">
+        <input id="postcodeInput" type="text" placeholder="e.g. M34" autocomplete="off">
+        <button id="searchButton">Search</button>
+      </div>
+    </div>
+
+    <div id="noResults" class="no-results" style="display:none;">
+      No routing information found for that postcode prefix.
+    </div>
+
+    <div id="carrierBlock" class="channel-block" style="display:block;">
+      <div class="channel-header">
+        <div class="channel-title">Carrier</div>
+        <div style="font-size:12px; color:#666;">Cut-off: 2pm (Mon–Fri, excluding UK bank holidays)</div>
+      </div>
+
+      <table>
+        <colgroup>
+          <col style="width: 55%">
+          <col style="width: 45%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Route</th>
+            <th>Next Delivery</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>3PLCO Overnight</td>
+            <td class="lead-time" id="carrierOvernightNext">—</td>
+          </tr>
+          <tr>
+            <td>3PLCO 1-3 Day</td>
+            <td class="lead-time" id="carrier13Next">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div id="resultsMeta" class="results-header" style="display:none;"></div>
+    <div id="resultsContainer"></div>
+
+  </div>
+
+  <div id="channelTooltip"></div>
+
+  <script>
+    // ============================================================
+    // CONFIG
+    // ============================================================
+    const CONFIG = {
+      API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
+      DAYS_AHEAD: 10
+    };
+
+    // ============================================================
+    // ROUTES SOURCE (Google Sheets CSV)
+    // ============================================================
+    const ROUTES_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRH6-jQDjHdpThiVhGe1mwrfOD_QRYbYYlCx8Mo1HvA-vLxudRTnpJMRWEZlyxGE-f9OXtnQBGDWoLB/pub?gid=0&single=true&output=csv";
+
+    const STATUS = {
+      AVAILABLE: "Available",
+      FULL_WEIGHT: "Full - On Weight",
+      FULL_DROPS: "Full - On Drops",
+      CLOSED: "Closed"
+    };
+
+    function setLoading(isLoading, title, sub, lockControls = true){
+      const overlay = document.getElementById("loadingOverlay");
+      const t = document.getElementById("loadingTitle");
+      const s = document.getElementById("loadingSub");
+      const btn = document.getElementById("searchButton");
+      const input = document.getElementById("postcodeInput");
+
+      if (title) t.textContent = title;
+      if (sub) s.textContent = sub;
+
+      overlay.style.display = isLoading ? "flex" : "none";
+
+      if (lockControls){
+        btn.disabled = isLoading;
+        input.disabled = isLoading;
+      }
+    }
+
+    function clearResultsForLoading(){
+      document.getElementById("carrierBlock").style.display = "none";
+      document.getElementById("resultsMeta").style.display = "none";
+      document.getElementById("resultsContainer").innerHTML = "";
+      document.getElementById("noResults").style.display = "none";
+    }
+
+    function stripBom(s) {
+      return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+    }
+
+    function detectDelimiter(headerLine) {
+      if (headerLine.includes("\t")) return "\t";
+      return ",";
+    }
+
+    function splitLine(line, delim) {
+      return line.split(delim).map(x => x.trim());
+    }
+
+    function parseDelimited(text) {
+      const cleanedText = stripBom(String(text || ""));
+      const lines = cleanedText.split(/\r?\n/).filter(l => l.trim() !== "");
+      if (!lines.length) return { headers: [], rows: [] };
+
+      const delim = detectDelimiter(lines[0]);
+      const headers = splitLine(lines[0], delim);
+
+      const rows = [];
+      for (const line of lines.slice(1)) {
+        const cols = splitLine(line, delim);
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = (cols[i] || ""));
+        rows.push(obj);
+      }
+      return { headers, rows };
+    }
+
+    let channelRules = {};
+
+    function loadChannelRules() {
+      fetch("channel_rules.csv?cb=" + Date.now())
+        .then(r => {
+          if (!r.ok) throw new Error("Failed to load channel_rules.csv");
+          return r.text();
+        })
+        .then(text => {
+          const parsed = parseDelimited(text);
+          const out = {};
+          parsed.rows.forEach(row => {
+            const channel = (row.channel || "").trim();
+            const rulesCell = (row.rules || "").trim();
+            if (!channel) return;
+
+            const parts = rulesCell.split("|").map(p => p.trim()).filter(Boolean);
+            let html = `<strong>${channel} rules</strong>`;
+            if (parts.length) html += "<br>" + parts.map(p => "- " + p).join("<br>");
+            out[channel] = html;
+          });
+          channelRules = out;
+        })
+        .catch(err => {
+          console.error("Error loading channel_rules.csv:", err);
+          channelRules = {};
+        });
+    }
+
+    let bankHolidaySet = new Set();
+    let bankHolidaysReady = Promise.resolve();
+
+    function toISODateKey(dateObj) {
+      const y = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+      const d = String(dateObj.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+
+    function loadBankHolidays() {
+      return fetch("bank_holidays.csv?cb=" + Date.now())
+        .then(r => {
+          if (!r.ok) throw new Error("Failed to load bank_holidays.csv");
+          return r.text();
+        })
+        .then(text => {
+          const parsed = parseDelimited(text);
+          const set = new Set();
+
+          parsed.rows.forEach(row => {
+            const d = (row.date || "").trim();
+            const div = (row.division || "").trim();
+            if (!d) return;
+            if (!div || div === "england-and-wales") set.add(d);
+          });
+
+          bankHolidaySet = set;
+        })
+        .catch(err => {
+          console.warn("Bank holidays not loaded (continuing without them):", err);
+          bankHolidaySet = new Set();
+        });
+    }
+
+    function normalisePrefix(v) {
+      return String(v || "").toUpperCase().replace(/\s+/g, "").trim();
+    }
+
+    function parseRoutes(text) {
+      const parsed = parseDelimited(text);
+      return parsed.rows.map(row => {
+        const daysArray = String(row.days || "")
+          .split("|")
+          .map(d => d.trim())
+          .filter(Boolean);
+
+        return {
+          prefix: normalisePrefix(row.prefix),
+          route: String(row.route || "").trim(),
+          channel: String(row.channel || "").trim(),
+          serviceType: String(row.serviceType || "").trim(),
+          leadTime: String(row.leadTime || "").trim(),
+          days: daysArray
+        };
+      }).filter(r => r.prefix && r.channel);
+    }
+
+    function parseLeadTimeWorkingDays(leadTimeText) {
+      const t = String(leadTimeText || "").toLowerCase();
+      const m = t.match(/(\d+)/);
+      if (m) return parseInt(m[1], 10);
+      if (t.includes("next day")) return 1;
+      if (t.includes("same day")) return 0;
+      return 0;
+    }
+
+    function isWorkingDay(dateObj) {
+      const day = dateObj.getDay();
+      if (day === 0 || day === 6) return false;
+      const iso = toISODateKey(dateObj);
+      if (bankHolidaySet.has(iso)) return false;
+      return true;
+    }
+
+    function startOfDay(dateObj) {
+      return new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+    }
+
+    function nextWorkingDay(dateObj) {
+      let d = startOfDay(dateObj);
+      do { d.setDate(d.getDate() + 1); } while (!isWorkingDay(d));
+      return d;
+    }
+
+    function addWorkingDays(dateObj, n) {
+      let d = startOfDay(dateObj);
+      let remaining = n;
+      while (remaining > 0) {
+        d.setDate(d.getDate() + 1);
+        if (isWorkingDay(d)) remaining--;
+      }
+      return d;
+    }
+
+    function weekdayName(dateObj) {
+      return dateObj.toLocaleDateString("en-GB", { weekday: "long" });
+    }
+
+    function weekdayShort(dateObj){
+      return dateObj.toLocaleDateString("en-GB", { weekday: "short" });
+    }
+
+    function displayDateShort(dateObj){
+      const dd = String(dateObj.getDate()).padStart(2, "0");
+      const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+      const yy = String(dateObj.getFullYear()).slice(-2);
+      return `${dd}/${mm}/${yy}`;
+    }
+
+    function formatDayDate(dateObj) {
+      const day = weekdayName(dateObj);
+      const dateStr = dateObj.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      return `${day} ${dateStr}`;
+    }
+
+    function getStartDateConsideringCutoff() {
+      const now = new Date();
+      const cutoffHour = 14;
+
+      let start = startOfDay(now);
+
+      if (!isWorkingDay(start)) {
+        return nextWorkingDay(start);
+      }
+
+      const afterCutoff =
+        (now.getHours() > cutoffHour) ||
+        (now.getHours() === cutoffHour && now.getMinutes() > 0);
+
+      if (afterCutoff) start = nextWorkingDay(start);
+
+      return start;
+    }
+
+    function buildWorkingDateColsFrom(startDate, n){
+      const cols = [];
+      let d = startOfDay(startDate);
+
+      if (!isWorkingDay(d)) d = nextWorkingDay(d);
+
+      let safety = 0;
+      while (cols.length < n && safety < 730){
+        if (isWorkingDay(d)){
+          cols.push({
+            date: new Date(d),
+            iso: toISODateKey(d),
+            weekday: d.getDay(),
+            head: `${weekdayShort(d)}<br>${displayDateShort(d)}`
+          });
+        }
+        d.setDate(d.getDate() + 1);
+        safety++;
+      }
+      return cols;
+    }
+
+    function computeCarrierNextDates() {
+      const start = getStartDateConsideringCutoff();
+      const overnight = addWorkingDays(start, 1);
+      const day3 = addWorkingDays(start, 3);
+
+      document.getElementById("carrierOvernightNext").textContent = formatDayDate(overnight);
+      document.getElementById("carrier13Next").textContent = formatDayDate(day3);
+    }
+
+    function findNextDeliveryDate(allowedDays, leadTimeText) {
+      if (!Array.isArray(allowedDays) || allowedDays.length === 0) return null;
+
+      const allowed = new Set(allowedDays.map(d => String(d).trim().toLowerCase()));
+      const start = getStartDateConsideringCutoff();
+      const leadDays = parseLeadTimeWorkingDays(leadTimeText);
+
+      const earliest = (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
+
+      let d = startOfDay(earliest);
+      for (let i = 0; i < 120; i++) {
+        const dayLower = weekdayName(d).toLowerCase();
+        if (allowed.has(dayLower) && d >= earliest && isWorkingDay(d)) return d;
+        d.setDate(d.getDate() + 1);
+      }
+      return null;
+    }
+
+    const overridesMap = new Map();
+
+    function ovKey(dateISO, route){
+      return `${dateISO}||${route}`;
+    }
+
+    async function loadOverridesForRange(fromISO, toISO){
+      overridesMap.clear();
+      const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`;
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json().catch(()=>null);
+      if (!data || !data.ok) throw new Error(`API failed: ${(data && data.error) ? data.error : "Unknown error"}`);
+
+      for (const row of (data.rows || [])){
+        const date = String(row.date || "").trim();
+        const route = String(row.route || "").trim();
+        const status = String(row.status || "").trim();
+        if (!date || !route || !status) continue;
+        overridesMap.set(ovKey(date, route), status);
+      }
+    }
+
+    function earliestBookableDeliveryDate(leadDays){
+      const start = getStartDateConsideringCutoff();
+      return (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
+    }
+
+    function routeRunsOnDayName(runDays, dateObj){
+      const d = weekdayName(dateObj).toLowerCase();
+      return runDays.has(d);
+    }
+
+    function classifyStatusCell({ runs, isClosed, overrideStatus }){
+      if (!runs){
+        return { cls: "inactiveCell statusCell", text: "" };
+      }
+
+      if (isClosed){
+        return { cls: "fullWeightCell statusCell", text: STATUS.CLOSED };
+      }
+
+      if (overrideStatus === STATUS.FULL_WEIGHT){
+        return { cls: "fullWeightCell statusCell", text: STATUS.FULL_WEIGHT };
+      }
+      if (overrideStatus === STATUS.FULL_DROPS){
+        return { cls: "fullDropsCell statusCell", text: STATUS.FULL_DROPS };
+      }
+      if (overrideStatus === STATUS.AVAILABLE){
+        return { cls: "availableCell statusCell", text: STATUS.AVAILABLE };
+      }
+
+      return { cls: "availableCell statusCell", text: STATUS.AVAILABLE };
+    }
+
+    function buildStatusStripHTML(route, runDaysArray, leadTimeText, dateCols){
+      const leadDays = parseLeadTimeWorkingDays(leadTimeText);
+      const earliest = earliestBookableDeliveryDate(leadDays);
+      const runDays = new Set((runDaysArray || []).map(d => String(d).trim().toLowerCase()).filter(Boolean));
+
+      let thead = "<thead><tr>";
+      for (const c of dateCols){
+        thead += `<th>${c.head}</th>`;
+      }
+      thead += "</tr></thead>";
+
+      let tbody = "<tbody><tr>";
+      for (const c of dateCols){
+        const runs = routeRunsOnDayName(runDays, c.date);
+        const isClosed = runs && (startOfDay(c.date) < startOfDay(earliest));
+
+        const ov = overridesMap.get(ovKey(c.iso, route));
+        const { cls, text } = classifyStatusCell({ runs, isClosed, overrideStatus: ov });
+
+        tbody += `<td class="${cls}">${text}</td>`;
+      }
+      tbody += "</tr></tbody>";
+
+      return `
+        <div class="status-strip" aria-label="Route status (next ${dateCols.length} working days)">
+          <table>
+            ${thead}
+            ${tbody}
+          </table>
+        </div>
+      `;
+    }
+
+    function buildStatusStripPlaceholderHTML(dateCols){
+      let thead = "<thead><tr>";
+      for (const c of dateCols){
+        thead += `<th>${c.head}</th>`;
+      }
+      thead += "</tr></thead>";
+
+      return `
+        <div class="status-strip" aria-label="Route status loading (next ${dateCols.length} working days)">
+          <table>
+            ${thead}
+            <tbody>
+              <tr>
+                <td class="status-loading-row" colspan="${dateCols.length}">Loading live status…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function normaliseInputPostcode(raw) {
+      return raw ? raw.toUpperCase().replace(/\s+/g, "") : "";
+    }
+
+    function findBestMatchingPrefix(routingData, cleaned) {
+      const prefixes = [...new Set(routingData.map(r => r.prefix))];
+      const matches = prefixes.filter(p => cleaned.startsWith(p));
+      return matches.sort((a, b) => b.length - a.length)[0] || null;
+    }
+
+    function groupByChannel(rows) {
+      return rows.reduce((acc, r) => {
+        acc[r.channel] = acc[r.channel] || [];
+        acc[r.channel].push(r);
+        return acc;
+      }, {});
+    }
+
+    function sortDays(days) {
+      const order = ["MONDAY","TUESDAY","WEDNESDAY","THURSDAY","FRIDAY","SATURDAY","SUNDAY"];
+      return days.slice().sort((a, b) => {
+        const aIndex = order.indexOf(String(a).toUpperCase());
+        const bIndex = order.indexOf(String(b).toUpperCase());
+        return aIndex - bIndex;
+      });
+    }
+
+    function makeSafeId(str){
+      return "ch_" + btoa(unescape(encodeURIComponent(String(str))))
+        .replace(/=+$/,"")
+        .replace(/[+/]/g, "_");
+    }
+
+    let pendingStripMeta = [];
+    let currentSearchToken = 0;
+
+    function buildResultsHTML(rows, usedPrefix, originalInput, metaForStrips) {
+      const grouped = groupByChannel(rows);
+      const channels = Object.keys(grouped).sort();
+
+      const resultsContainer = document.getElementById("resultsContainer");
+      const resultsMeta = document.getElementById("resultsMeta");
+      const noResults = document.getElementById("noResults");
+
+      if (!channels.length) {
+        resultsMeta.style.display = "none";
+        resultsContainer.innerHTML = "";
+        noResults.style.display = "block";
+        return;
+      }
+
+      noResults.style.display = "none";
+      resultsMeta.style.display = "block";
+      resultsMeta.textContent =
+        `Results for postcode: ${originalInput || usedPrefix} (matched prefix: ${usedPrefix})`;
+
+      const metaByChannel = new Map((metaForStrips || []).map(m => [m.channel, m]));
+
+      let html = "";
+
+      channels.forEach(channel => {
+        const rowsForChannel = grouped[channel];
+
+        const route = rowsForChannel[0].route;
+        const serviceType = rowsForChannel[0].serviceType;
+        const leadTime = rowsForChannel[0].leadTime;
+
+        const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
+
+        const nextDate = findNextDeliveryDate(allDays, leadTime);
+        const nextDeliveryText = nextDate ? formatDayDate(nextDate) : "";
+
+        const meta = metaByChannel.get(channel);
+        const dateColsForChannel = meta ? meta.dateCols : buildWorkingDateColsFrom(nextDate || getStartDateConsideringCutoff(), CONFIG.DAYS_AHEAD);
+        const stripId = meta ? meta.stripId : makeSafeId(channel);
+
+        const statusStripPlaceholder = buildStatusStripPlaceholderHTML(dateColsForChannel);
+
+        html += `
+          <div class="channel-block">
+            <div class="channel-header">
+              <div class="channel-title">${channel}</div>
+              <div class="channel-rules-trigger" data-channel="${channel}">
+                Hover here for channel rules
+              </div>
+            </div>
+
+            <table>
+              <colgroup>
+                <col style="width: 24%">
+                <col style="width: 35%">
+                <col style="width: 12%">
+                <col style="width: 12%">
+                <col style="width: 17%">
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Route</th>
+                  <th>Delivery Days</th>
+                  <th>Delivery Type</th>
+                  <th>Lead Time</th>
+                  <th>Next Delivery</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>${route}</td>
+                  <td>${allDays.join(", ")}</td>
+                  <td>${serviceType}</td>
+                  <td class="lead-time">${leadTime}</td>
+                  <td class="lead-time">${nextDeliveryText}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div id="${stripId}">
+              ${statusStripPlaceholder}
+            </div>
+          </div>
+        `;
+      });
+
+      resultsContainer.innerHTML = html;
+      attachChannelRuleEvents();
+    }
+
+    function updateAllStatusStripsFromMeta(metaForStrips){
+      for (const m of (metaForStrips || [])){
+        const host = document.getElementById(m.stripId);
+        if (!host) continue;
+        host.innerHTML = buildStatusStripHTML(m.route, m.allDays, m.leadTime, m.dateCols);
+      }
+    }
+
+    function attachChannelRuleEvents() {
+      const triggers = document.querySelectorAll(".channel-rules-trigger");
+      const tooltip = document.getElementById("channelTooltip");
+
+      function positionTooltip(e) {
+        const offset = 12;
+        let x = e.clientX + offset;
+        let y = e.clientY + offset;
+
+        tooltip.style.left = x + "px";
+        tooltip.style.top = y + "px";
+
+        const rect = tooltip.getBoundingClientRect();
+        if (rect.right > window.innerWidth - 10) {
+          x = e.clientX - rect.width - offset;
+          tooltip.style.left = x + "px";
+        }
+        if (rect.bottom > window.innerHeight - 10) {
+          y = e.clientY - rect.height - offset;
+          tooltip.style.top = y + "px";
+        }
+      }
+
+      triggers.forEach(trigger => {
+        trigger.addEventListener("mouseenter", e => {
+          const channel = trigger.getAttribute("data-channel");
+          const content = channelRules[channel] || "No rules defined for this channel.";
+          tooltip.innerHTML = content;
+          tooltip.style.display = "block";
+          positionTooltip(e);
+        });
+
+        trigger.addEventListener("mousemove", positionTooltip);
+        trigger.addEventListener("mouseleave", () => { tooltip.style.display = "none"; });
+      });
+    }
+
+    function showLandingCarrier() {
+      document.getElementById("carrierBlock").style.display = "block";
+      document.getElementById("resultsMeta").style.display = "none";
+      document.getElementById("resultsContainer").innerHTML = "";
+      document.getElementById("noResults").style.display = "none";
+    }
+
+    function hideLandingCarrier() {
+      document.getElementById("carrierBlock").style.display = "none";
+    }
+
+    async function performSearch() {
+      const input = document.getElementById("postcodeInput").value.trim();
+      const thisToken = ++currentSearchToken;
+
+      if (!input) {
+        showLandingCarrier();
+        document.getElementById("noResults").style.display = "block";
+        document.getElementById("noResults").textContent = "Please enter a postcode prefix.";
+        return;
+      }
+
+      if (!ROUTES_SHEET_CSV_URL || ROUTES_SHEET_CSV_URL.includes("PASTE_YOUR_GVIZ_CSV_URL_HERE")){
+        alert("Routes source URL not configured. Please set ROUTES_SHEET_CSV_URL to your Google Sheets GViz CSV link.");
+        return;
+      }
+
+      clearResultsForLoading();
+      setLoading(true, "Loading route information…", "Fetching routes…", true);
+
+      try{
+        await bankHolidaysReady;
+
+        const cleaned = normaliseInputPostcode(input);
+
+        // Fetch routes from Google Sheets CSV endpoint (cache-bust added)
+        const routesUrl = `${ROUTES_SHEET_CSV_URL}${ROUTES_SHEET_CSV_URL.includes("?") ? "&" : "?"}cb=${Date.now()}`;
+
+        const res = await fetch(routesUrl, { cache: "no-store" });
+        if (!res.ok) throw new Error("Failed to load routes");
+        const text = await res.text();
+
+        const routingData = parseRoutes(text);
+        const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
+
+        if (!bestPrefix) {
+          setLoading(false, null, null, true);
+
+          showLandingCarrier();
+          document.getElementById("noResults").style.display = "block";
+          document.getElementById("noResults").textContent = "No routing information found for that postcode prefix.";
+          return;
+        }
+
+        hideLandingCarrier();
+
+        const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
+
+        const grouped = groupByChannel(matchingRows);
+        const channels = Object.keys(grouped);
+
+        const meta = [];
+        let globalFromISO = null;
+        let globalToISO = null;
+
+        for (const channel of channels){
+          const rowsForChannel = grouped[channel];
+          const route = rowsForChannel[0].route;
+          const leadTime = rowsForChannel[0].leadTime;
+          const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
+
+          const nextDate = findNextDeliveryDate(allDays, leadTime);
+          const stripStart = nextDate || getStartDateConsideringCutoff();
+          const dateCols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+
+          if (dateCols.length){
+            const fromISO = dateCols[0].iso;
+            const toISO = dateCols[dateCols.length - 1].iso;
+
+            if (!globalFromISO || fromISO < globalFromISO) globalFromISO = fromISO;
+            if (!globalToISO || toISO > globalToISO) globalToISO = toISO;
+          }
+
+          meta.push({
+            channel,
+            route,
+            allDays,
+            leadTime,
+            dateCols,
+            stripId: makeSafeId(channel)
+          });
+        }
+
+        pendingStripMeta = meta;
+
+        // Render route info instantly + placeholder status
+        buildResultsHTML(matchingRows, bestPrefix, input, pendingStripMeta);
+
+        // Hide overlay now
+        setLoading(false, null, null, true);
+
+        // Background load live status and then update strips
+        if (globalFromISO && globalToISO){
+          (async () => {
+            try{
+              await loadOverridesForRange(globalFromISO, globalToISO);
+              if (thisToken !== currentSearchToken) return;
+              updateAllStatusStripsFromMeta(pendingStripMeta);
+            }catch(apiErr){
+              console.warn("Route status API not available. Showing defaults:", apiErr);
+              if (thisToken !== currentSearchToken) return;
+              updateAllStatusStripsFromMeta(pendingStripMeta);
+            }
+          })();
+        }
+
+      }catch(err){
+        console.error("Error during search:", err);
+        setLoading(false, null, null, true);
+        showLandingCarrier();
+        alert("Routing data is not available at the moment. Please try again in a moment or contact the system owner.");
+      }
+    }
+
+    document.getElementById("searchButton").onclick = performSearch;
+    document.getElementById("postcodeInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); performSearch(); }
+    });
+
+    (function init() {
+      loadChannelRules();
+
+      const btn = document.getElementById("searchButton");
+      btn.disabled = true;
+
+      bankHolidaysReady = loadBankHolidays().finally(() => {
+        btn.disabled = false;
+
+        computeCarrierNextDates();
+        setInterval(computeCarrierNextDates, 60 * 1000);
+        window.addEventListener("focus", computeCarrierNextDates);
+      });
+
+      showLandingCarrier();
+    })();
+  </script>
+</body>
+</html>
