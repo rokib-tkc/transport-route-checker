@@ -231,15 +231,14 @@
       color: #8a5a12;
     }
 
-    /* Placeholder message while strip loads */
-    .strip-loading{
-      margin-top: 10px;
-      border: 1px dashed #cfcfcf;
-      border-radius: 8px;
-      padding: 10px 12px;
-      background: #fff;
-      font-size: 13px;
+    /* Original-style placeholder row inside a real strip table */
+    .status-loading-row{
+      height: 44px;
+      font-weight: 700;
+      font-size: 12.5px;
       color: #444;
+      background: #fff;
+      text-align: center;
     }
 
     /* ============================================================
@@ -1074,6 +1073,28 @@
       `;
     }
 
+    // ORIGINAL-STYLE PLACEHOLDER STRIP (headers + single loading row)
+    function buildStatusStripPlaceholderHTML(dateCols){
+      let thead = "<thead><tr>";
+      for (const c of dateCols){
+        thead += `<th>${c.head}</th>`;
+      }
+      thead += "</tr></thead>";
+
+      return `
+        <div class="status-strip" aria-label="Route status loading (next ${dateCols.length} working days)">
+          <table>
+            ${thead}
+            <tbody>
+              <tr>
+                <td class="status-loading-row" colspan="${dateCols.length}">Loading live status…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
     // ============================================================
     // CORE HELPERS
     // ============================================================
@@ -1106,6 +1127,7 @@
 
     // ============================================================
     // Build results FAST: first table immediately, then fill strips later
+    // (UPDATED: uses original-style placeholder strip table)
     // ============================================================
     function buildResultsHTMLFast(rows, usedPrefix, originalInput) {
       const grouped = groupByChannel(rows);
@@ -1141,7 +1163,13 @@
         const nextDate = findNextDeliveryDate(allDays, leadTime);
         const nextDeliveryText = nextDate ? formatDayDate(nextDate) : "";
 
+        // IMPORTANT: keep the id stable so we can update innerHTML later
         const stripId = `strip_${idx}_${route.replace(/\s+/g,'_')}`;
+
+        // Build the same date columns we will use for the real strip
+        const stripStart = nextDate || getStartDateConsideringCutoff();
+        const dateColsForChannel = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+        const placeholderStrip = buildStatusStripPlaceholderHTML(dateColsForChannel);
 
         html += `
           <div class="channel-block">
@@ -1180,7 +1208,9 @@
               </tbody>
             </table>
 
-            <div class="strip-loading" id="${stripId}">Loading route status…</div>
+            <div id="${stripId}">
+              ${placeholderStrip}
+            </div>
           </div>
         `;
       });
@@ -1188,7 +1218,7 @@
       resultsContainer.innerHTML = html;
       attachChannelRuleEvents();
 
-      // NEW: show "Carrier" link only once user is in results mode
+      // show "Carrier" link only once user is in results mode
       setCarrierLinkVisible(true);
     }
 
@@ -1229,6 +1259,7 @@
       });
     }
 
+    // UPDATED: populate by replacing innerHTML of the stable container
     function populateStrips(rows){
       const grouped = groupByChannel(rows);
       const channels = Object.keys(grouped).sort();
@@ -1248,9 +1279,9 @@
         const stripHTML = buildStatusStripHTML(route, allDays, leadTime, dateColsForChannel);
 
         const stripId = `strip_${idx}_${route.replace(/\s+/g,'_')}`;
-        const el = document.getElementById(stripId);
-        if (el){
-          el.outerHTML = stripHTML;
+        const host = document.getElementById(stripId);
+        if (host){
+          host.innerHTML = stripHTML;
         }
       });
     }
@@ -1264,7 +1295,7 @@
       document.getElementById("resultsContainer").innerHTML = "";
       document.getElementById("noResults").style.display = "none";
 
-      // NEW: hide "Carrier" link when carrier table is already in view
+      // hide "Carrier" link when carrier table is already in view
       setCarrierLinkVisible(false);
     }
 
@@ -1348,7 +1379,7 @@
             populateStrips(matchingRows);
 
           }catch(apiErr){
-            console.warn("Route status API not available. Leaving strips as loading/default:", apiErr);
+            console.warn("Route status API not available. Showing default strips:", apiErr);
             populateStrips(matchingRows);
           }
         })();
@@ -1709,4 +1740,3 @@
   </script>
 </body>
 </html>
-
