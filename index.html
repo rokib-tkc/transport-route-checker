@@ -21,6 +21,37 @@
       position: relative;
     }
 
+    /* Top-left link (Carrier) */
+    .top-link-left{
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #0078d4;
+      text-decoration: underline;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      display: none; /* hidden on landing (carrier shown), shown only after a successful search */
+    }
+    .top-link-left:hover{ color:#005ea3; }
+
+    /* Top-right link (Routes Status) */
+    .top-link {
+      position: absolute;
+      top: 14px;
+      right: 16px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #0078d4;
+      text-decoration: underline;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .top-link:hover { color: #005ea3; }
+
     .search-section {
       display: flex;
       flex-wrap: wrap;
@@ -53,6 +84,7 @@
       cursor: pointer;
       background: #0078d4;
       color: #fff;
+      font-weight: 700;
     }
     button:hover { background: #005ea3; }
     button:disabled { background: #9bbbd7; cursor: not-allowed; }
@@ -129,14 +161,18 @@
       display: none;
     }
 
+    /* ============================================================
+       ROUTE STATUS STRIP (View-only) — softened colours
+       ============================================================ */
     :root{
       --border:#cfcfcf;
       --header:#f0f0f0;
       --inactive:#f7f7f7;
 
-      --green:#dff3e6;
-      --red:#f7d6d6;
-      --orange:#fde8c8;
+      /* softened status colours */
+      --green:#dff3e6;    /* light mint */
+      --red:#f7d6d6;      /* light rose */
+      --orange:#fde8c8;   /* light amber */
     }
 
     .status-strip{
@@ -195,14 +231,19 @@
       color: #8a5a12;
     }
 
+    /* Original-style placeholder row inside a real strip table */
     .status-loading-row{
       height: 44px;
       font-weight: 700;
       font-size: 12.5px;
       color: #444;
       background: #fff;
+      text-align: center;
     }
 
+    /* ============================================================
+       LOADING OVERLAY (main search)
+       ============================================================ */
     .loading-overlay{
       position: fixed;
       inset: 0;
@@ -246,6 +287,234 @@
       line-height: 1.35;
     }
 
+    /* ============================================================
+       ROUTES STATUS OVERLAY (view-only grid)
+       ============================================================ */
+    .overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 1000000;
+      display: none;
+      align-items: stretch;
+      justify-content: stretch;
+      padding: 18px;
+    }
+    .overlayPanel{
+      width: 100%;
+      height: 100%;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .overlayHeader{
+      padding: 14px 16px;
+      background: #f7f7f7;
+      border-bottom: 1px solid #e5e5e5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .overlayTitle{
+      font-size: 16px;
+      font-weight: 800;
+      margin: 0;
+    }
+    .overlayControls{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .overlayBtn{
+      padding: 8px 14px;
+      font-size: 13px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      background: #0078d4;
+      color: #fff;
+      font-weight: 800;
+    }
+    .overlayBtn:hover{ background:#005ea3; }
+    .overlayBtn:disabled{ background:#9bbbd7; cursor:not-allowed; }
+
+    .overlayClose{
+      padding: 8px 12px;
+      font-size: 13px;
+      border-radius: 6px;
+      border: 1px solid #0078d4;
+      background: transparent;
+      color: #0078d4;
+      font-weight: 800;
+      cursor: pointer;
+      user-select:none;
+    }
+    .overlayClose:hover{
+      background:#0078d4;
+      color:#fff;
+    }
+
+    .overlayBody{
+      padding: 0;
+      overflow: auto;
+      background: #fafafa;
+      flex: 1;
+    }
+    .overlayBodyInner{
+      padding: 12px 12px;
+    }
+
+    .overlayLoadingRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      padding: 10px 12px;
+      background:#fff;
+      border:1px solid #e0e0e0;
+      border-radius:10px;
+      max-width: 520px;
+      margin: 10px auto;
+    }
+    .overlaySpinner{
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 4px solid #d9d9d9;
+      border-top-color:#0078d4;
+      animation: spin 0.85s linear infinite;
+      flex: 0 0 auto;
+    }
+    .overlayLoadingText{
+      font-size: 13px;
+      font-weight: 700;
+      color:#222;
+    }
+
+    /* View-only grid styles (match admin-ish behaviour, but Route Checker colours) */
+    .routesGridWrap{
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      background: #fff;
+      overflow: visible;
+    }
+
+    table.routesGrid{
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+      border: 0;
+      font-size: 13px;
+    }
+
+    .routesGrid th, .routesGrid td{
+      border: 1px solid #ddd;
+      padding: 6px 8px;
+      text-align: center;
+      vertical-align: middle;
+      height: 44px;
+      line-height: 1.2;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      white-space: normal;
+    }
+    .routesGrid thead th{
+      position: sticky;
+      top: 0;
+      z-index: 70;
+      background: var(--header);
+      font-weight: 700;
+      font-size: 15.5px;
+      box-shadow: 0 2px 0 #ddd;
+    }
+    .routesGrid thead .routeHead{
+      z-index: 90;
+    }
+
+    .routesGrid .routeHead{
+      width: 260px;
+      position: sticky;
+      left: 0;
+      z-index: 60;
+      text-align: left;
+      padding: 8px 10px;
+    }
+
+    .routesGrid .routeCell{
+      width: 260px;
+      background: #e6e6e6;
+      position: sticky;
+      left: 0;
+      z-index: 50;
+      text-align: left;
+      padding: 8px 10px;
+      overflow: visible;
+    }
+
+    /* Match Route Checker palette */
+    .gridInactive{ background: var(--inactive); color:#555; }
+    .gridAvailable{ background: var(--green); color:#1f6b3a; font-weight:700; }
+    .gridFullWeight{ background: var(--red); color:#8a1f1f; font-weight:700; }
+    .gridFullDrops{ background: var(--orange); color:#8a5a12; font-weight:700; }
+
+    /* Tooltip (postcode groups) */
+    .routeName{
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      cursor: help;
+      z-index: 1;
+      font-weight: 700;
+      font-size: 15.5px;
+    }
+    .routeTooltip{
+      position: absolute;
+      top: calc(100% + 8px);
+      z-index: 1000005;
+      min-width: 280px;
+      max-width: 520px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 10px 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      text-align: left;
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition: opacity .12s ease, transform .12s ease;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #111;
+      white-space: normal;
+      word-break: break-word;
+    }
+    .routeName:hover .routeTooltip{
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .routeTooltipTitle{
+      font-weight: 800;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+    .routeTooltipBody{
+      font-weight: 700;
+      color: #333;
+    }
+
+    .routesGrid tbody{ position: relative; z-index: 1; }
+    .routesGrid tbody tr:hover{ position: relative; z-index: 80; }
+    .routesGrid .routeCell:hover{ z-index: 90; }
+    .routesGrid .routeName:hover{ z-index: 100; }
+
     @media (max-width: 600px) {
       .search-section { flex-direction: column; align-items: flex-start; }
       .search-input-wrapper { width: 100%; }
@@ -257,20 +526,63 @@
         font-size: 12px;
       }
       .status-strip .statusCell{ font-size: 12px; }
+
+      .top-link{ right: 12px; }
+      .top-link-left{ left: 12px; }
     }
   </style>
 </head>
 
 <body>
+  <!-- MAIN SEARCH LOADING OVERLAY -->
   <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true">
     <div class="loading-panel">
       <div class="spinner" aria-hidden="true"></div>
       <p class="loading-title" id="loadingTitle">Loading…</p>
-      <p class="loading-sub" id="loadingSub">Fetching routes…</p>
+      <p class="loading-sub" id="loadingSub">Fetching routes.</p>
+    </div>
+  </div>
+
+  <!-- ROUTES STATUS OVERLAY -->
+  <div id="routesOverlay" class="overlay" aria-modal="true" role="dialog">
+    <div class="overlayPanel">
+      <div class="overlayHeader">
+        <div class="overlayTitle">Routes Status</div>
+        <div class="overlayControls">
+          <button class="overlayBtn" id="routesRefreshBtn">Refresh</button>
+          <button class="overlayClose" id="routesCloseBtn">Close</button>
+        </div>
+      </div>
+
+      <div class="overlayBody">
+        <div class="overlayBodyInner">
+          <div id="routesOverlayLoading" style="display:none;">
+            <div class="overlayLoadingRow">
+              <div class="overlaySpinner" aria-hidden="true"></div>
+              <div class="overlayLoadingText">Loading routes and live status…</div>
+            </div>
+          </div>
+
+          <div class="routesGridWrap" id="routesGridWrap" style="display:none;">
+            <table class="routesGrid" id="routesGrid"></table>
+          </div>
+
+          <div id="routesOverlayMsg" style="display:none;margin:10px auto;max-width:720px;font-size:13px;color:#a00;background:#ffe5e5;padding:10px 12px;border-radius:8px;border:1px solid #f3bcbc;">
+            Error loading routes status.
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
   <div class="container">
+    <!-- NEW: Top-left link (Carrier) -->
+    <div class="top-link-left" id="carrierLink">Carrier</div>
+
+    <!-- Existing: Top-right link (Routes Status) -->
+    <div class="top-link" id="routesStatusLink">Routes Status</div>
+
     <h1>Transport Route Checker</h1>
 
     <div class="search-section">
@@ -285,6 +597,7 @@
       No routing information found for that postcode prefix.
     </div>
 
+    <!-- LANDING: Carrier table shows before any successful search -->
     <div id="carrierBlock" class="channel-block" style="display:block;">
       <div class="channel-header">
         <div class="channel-title">Carrier</div>
@@ -317,7 +630,6 @@
 
     <div id="resultsMeta" class="results-header" style="display:none;"></div>
     <div id="resultsContainer"></div>
-
   </div>
 
   <div id="channelTooltip"></div>
@@ -328,13 +640,17 @@
     // ============================================================
     const CONFIG = {
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
-      DAYS_AHEAD: 10
-    };
+      DAYS_AHEAD: 10,
 
-    // ============================================================
-    // ROUTES SOURCE (Google Sheets CSV)
-    // ============================================================
-    const ROUTES_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRH6-jQDjHdpThiVhGe1mwrfOD_QRYbYYlCx8Mo1HvA-vLxudRTnpJMRWEZlyxGE-f9OXtnQBGDWoLB/pub?gid=0&single=true&output=csv";
+      // ROUTES now come from Google Sheets published CSV:
+      ROUTES_SHEET_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRH6-jQDjHdpThiVhGe1mwrfOD_QRYbYYlCx8Mo1HvA-vLxudRTnpJMRWEZlyxGE-f9OXtnQBGDWoLB/pub?gid=0&single=true&output=csv",
+
+      BANK_HOLIDAYS_CSV_URL: "bank_holidays.csv",
+      CHANNEL_RULES_CSV_URL: "channel_rules.csv",
+
+      // Used for overlay schedule inference (matches admin logic)
+      COMPONENT_CHANNEL_NAME: "Component Channel"
+    };
 
     const STATUS = {
       AVAILABLE: "Available",
@@ -343,7 +659,25 @@
       CLOSED: "Closed"
     };
 
-    function setLoading(isLoading, title, sub, lockControls = true){
+    // ============================================================
+    // NEW: CARRIER LINK SHOW/HIDE + REFRESH
+    // ============================================================
+    const carrierLinkEl = document.getElementById("carrierLink");
+
+    function setCarrierLinkVisible(isVisible){
+      carrierLinkEl.style.display = isVisible ? "block" : "none";
+    }
+
+    // Click = refresh page back to landing
+    carrierLinkEl.addEventListener("click", () => {
+      // Hard refresh to ensure carrier dates + state reset
+      window.location.reload();
+    });
+
+    // ============================================================
+    // MAIN SEARCH LOADING UI HELPERS
+    // ============================================================
+    function setLoading(isLoading, title, sub){
       const overlay = document.getElementById("loadingOverlay");
       const t = document.getElementById("loadingTitle");
       const s = document.getElementById("loadingSub");
@@ -354,11 +688,8 @@
       if (sub) s.textContent = sub;
 
       overlay.style.display = isLoading ? "flex" : "none";
-
-      if (lockControls){
-        btn.disabled = isLoading;
-        input.disabled = isLoading;
-      }
+      btn.disabled = isLoading;
+      input.disabled = isLoading;
     }
 
     function clearResultsForLoading(){
@@ -368,6 +699,9 @@
       document.getElementById("noResults").style.display = "none";
     }
 
+    // ============================================================
+    // DELIMITER-DETECTING PARSER (comma CSV or tab TSV)
+    // ============================================================
     function stripBom(s) {
       return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
     }
@@ -399,10 +733,13 @@
       return { headers, rows };
     }
 
+    // ============================================================
+    // CHANNEL RULES (LOADED FROM channel_rules.csv)
+    // ============================================================
     let channelRules = {};
 
     function loadChannelRules() {
-      fetch("channel_rules.csv?cb=" + Date.now())
+      fetch(CONFIG.CHANNEL_RULES_CSV_URL + "?cb=" + Date.now())
         .then(r => {
           if (!r.ok) throw new Error("Failed to load channel_rules.csv");
           return r.text();
@@ -428,7 +765,10 @@
         });
     }
 
-    let bankHolidaySet = new Set();
+    // ============================================================
+    // BANK HOLIDAYS (LOADED FROM bank_holidays.csv)
+    // ============================================================
+    let bankHolidaySet = new Set(); // ISO YYYY-MM-DD
     let bankHolidaysReady = Promise.resolve();
 
     function toISODateKey(dateObj) {
@@ -439,7 +779,7 @@
     }
 
     function loadBankHolidays() {
-      return fetch("bank_holidays.csv?cb=" + Date.now())
+      return fetch(CONFIG.BANK_HOLIDAYS_CSV_URL + "?cb=" + Date.now())
         .then(r => {
           if (!r.ok) throw new Error("Failed to load bank_holidays.csv");
           return r.text();
@@ -449,8 +789,8 @@
           const set = new Set();
 
           parsed.rows.forEach(row => {
-            const d = (row.date || "").trim();
-            const div = (row.division || "").trim();
+            const d = (row.date || "").trim();           // expected YYYY-MM-DD
+            const div = (row.division || "").trim();     // england-and-wales
             if (!d) return;
             if (!div || div === "england-and-wales") set.add(d);
           });
@@ -463,6 +803,9 @@
         });
     }
 
+    // ============================================================
+    // ROUTES PARSING (routes from Google Sheets CSV)
+    // ============================================================
     function normalisePrefix(v) {
       return String(v || "").toUpperCase().replace(/\s+/g, "").trim();
     }
@@ -486,6 +829,16 @@
       }).filter(r => r.prefix && r.channel);
     }
 
+    async function fetchRoutesFromSheet() {
+      const url = CONFIG.ROUTES_SHEET_CSV_URL + "&cb=" + Date.now();
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load routes sheet CSV");
+      return await res.text();
+    }
+
+    // ============================================================
+    // WORKING DAY + CUTOFF HELPERS (channels + Carrier + overlay)
+    // ============================================================
     function parseLeadTimeWorkingDays(leadTimeText) {
       const t = String(leadTimeText || "").toLowerCase();
       const m = t.match(/(\d+)/);
@@ -496,7 +849,7 @@
     }
 
     function isWorkingDay(dateObj) {
-      const day = dateObj.getDay();
+      const day = dateObj.getDay(); // 0 Sun ... 6 Sat
       if (day === 0 || day === 6) return false;
       const iso = toISODateKey(dateObj);
       if (bankHolidaySet.has(iso)) return false;
@@ -559,8 +912,25 @@
         (now.getHours() === cutoffHour && now.getMinutes() > 0);
 
       if (afterCutoff) start = nextWorkingDay(start);
-
       return start;
+    }
+
+    function getOverlayGridStartDate() {
+      const now = new Date();
+      const cutoffHour = 14;
+
+      let today = startOfDay(now);
+
+      if (!isWorkingDay(today)) {
+        today = nextWorkingDay(today);
+      }
+
+      const afterCutoff =
+        (now.getHours() > cutoffHour) ||
+        (now.getHours() === cutoffHour && now.getMinutes() > 0);
+
+      const first = nextWorkingDay(today);
+      return afterCutoff ? nextWorkingDay(first) : first;
     }
 
     function buildWorkingDateColsFrom(startDate, n){
@@ -594,13 +964,15 @@
       document.getElementById("carrier13Next").textContent = formatDayDate(day3);
     }
 
+    // ============================================================
+    // CHANNEL NEXT DELIVERY CALCULATION
+    // ============================================================
     function findNextDeliveryDate(allowedDays, leadTimeText) {
       if (!Array.isArray(allowedDays) || allowedDays.length === 0) return null;
 
       const allowed = new Set(allowedDays.map(d => String(d).trim().toLowerCase()));
       const start = getStartDateConsideringCutoff();
       const leadDays = parseLeadTimeWorkingDays(leadTimeText);
-
       const earliest = (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
 
       let d = startOfDay(earliest);
@@ -612,11 +984,11 @@
       return null;
     }
 
+    // ============================================================
+    // ROUTE STATUS OVERRIDES (Google Sheet via Apps Script)
+    // ============================================================
     const overridesMap = new Map();
-
-    function ovKey(dateISO, route){
-      return `${dateISO}||${route}`;
-    }
+    function ovKey(dateISO, route){ return `${dateISO}||${route}`; }
 
     async function loadOverridesForRange(fromISO, toISO){
       overridesMap.clear();
@@ -634,6 +1006,9 @@
       }
     }
 
+    // ============================================================
+    // STATUS STRIP LOGIC (View-only, channel rule wins)
+    // ============================================================
     function earliestBookableDeliveryDate(leadDays){
       const start = getStartDateConsideringCutoff();
       return (leadDays > 0) ? addWorkingDays(start, leadDays) : start;
@@ -669,6 +1044,7 @@
     function buildStatusStripHTML(route, runDaysArray, leadTimeText, dateCols){
       const leadDays = parseLeadTimeWorkingDays(leadTimeText);
       const earliest = earliestBookableDeliveryDate(leadDays);
+
       const runDays = new Set((runDaysArray || []).map(d => String(d).trim().toLowerCase()).filter(Boolean));
 
       let thead = "<thead><tr>";
@@ -681,10 +1057,8 @@
       for (const c of dateCols){
         const runs = routeRunsOnDayName(runDays, c.date);
         const isClosed = runs && (startOfDay(c.date) < startOfDay(earliest));
-
         const ov = overridesMap.get(ovKey(c.iso, route));
         const { cls, text } = classifyStatusCell({ runs, isClosed, overrideStatus: ov });
-
         tbody += `<td class="${cls}">${text}</td>`;
       }
       tbody += "</tr></tbody>";
@@ -699,6 +1073,7 @@
       `;
     }
 
+    // ORIGINAL-STYLE PLACEHOLDER STRIP (headers + single loading row)
     function buildStatusStripPlaceholderHTML(dateCols){
       let thead = "<thead><tr>";
       for (const c of dateCols){
@@ -720,6 +1095,9 @@
       `;
     }
 
+    // ============================================================
+    // CORE HELPERS
+    // ============================================================
     function normaliseInputPostcode(raw) {
       return raw ? raw.toUpperCase().replace(/\s+/g, "") : "";
     }
@@ -747,16 +1125,11 @@
       });
     }
 
-    function makeSafeId(str){
-      return "ch_" + btoa(unescape(encodeURIComponent(String(str))))
-        .replace(/=+$/,"")
-        .replace(/[+/]/g, "_");
-    }
-
-    let pendingStripMeta = [];
-    let currentSearchToken = 0;
-
-    function buildResultsHTML(rows, usedPrefix, originalInput, metaForStrips) {
+    // ============================================================
+    // Build results FAST: first table immediately, then fill strips later
+    // (UPDATED: uses original-style placeholder strip table)
+    // ============================================================
+    function buildResultsHTMLFast(rows, usedPrefix, originalInput) {
       const grouped = groupByChannel(rows);
       const channels = Object.keys(grouped).sort();
 
@@ -776,11 +1149,9 @@
       resultsMeta.textContent =
         `Results for postcode: ${originalInput || usedPrefix} (matched prefix: ${usedPrefix})`;
 
-      const metaByChannel = new Map((metaForStrips || []).map(m => [m.channel, m]));
-
       let html = "";
 
-      channels.forEach(channel => {
+      channels.forEach((channel, idx) => {
         const rowsForChannel = grouped[channel];
 
         const route = rowsForChannel[0].route;
@@ -792,11 +1163,13 @@
         const nextDate = findNextDeliveryDate(allDays, leadTime);
         const nextDeliveryText = nextDate ? formatDayDate(nextDate) : "";
 
-        const meta = metaByChannel.get(channel);
-        const dateColsForChannel = meta ? meta.dateCols : buildWorkingDateColsFrom(nextDate || getStartDateConsideringCutoff(), CONFIG.DAYS_AHEAD);
-        const stripId = meta ? meta.stripId : makeSafeId(channel);
+        // IMPORTANT: keep the id stable so we can update innerHTML later
+        const stripId = `strip_${idx}_${route.replace(/\s+/g,'_')}`;
 
-        const statusStripPlaceholder = buildStatusStripPlaceholderHTML(dateColsForChannel);
+        // Build the same date columns we will use for the real strip
+        const stripStart = nextDate || getStartDateConsideringCutoff();
+        const dateColsForChannel = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+        const placeholderStrip = buildStatusStripPlaceholderHTML(dateColsForChannel);
 
         html += `
           <div class="channel-block">
@@ -836,7 +1209,7 @@
             </table>
 
             <div id="${stripId}">
-              ${statusStripPlaceholder}
+              ${placeholderStrip}
             </div>
           </div>
         `;
@@ -844,14 +1217,9 @@
 
       resultsContainer.innerHTML = html;
       attachChannelRuleEvents();
-    }
 
-    function updateAllStatusStripsFromMeta(metaForStrips){
-      for (const m of (metaForStrips || [])){
-        const host = document.getElementById(m.stripId);
-        if (!host) continue;
-        host.innerHTML = buildStatusStripHTML(m.route, m.allDays, m.leadTime, m.dateCols);
-      }
+      // show "Carrier" link only once user is in results mode
+      setCarrierLinkVisible(true);
     }
 
     function attachChannelRuleEvents() {
@@ -891,20 +1259,56 @@
       });
     }
 
+    // UPDATED: populate by replacing innerHTML of the stable container
+    function populateStrips(rows){
+      const grouped = groupByChannel(rows);
+      const channels = Object.keys(grouped).sort();
+
+      channels.forEach((channel, idx) => {
+        const rowsForChannel = grouped[channel];
+
+        const route = rowsForChannel[0].route;
+        const leadTime = rowsForChannel[0].leadTime;
+
+        const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
+
+        const nextDate = findNextDeliveryDate(allDays, leadTime);
+        const stripStart = nextDate || getStartDateConsideringCutoff();
+        const dateColsForChannel = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+
+        const stripHTML = buildStatusStripHTML(route, allDays, leadTime, dateColsForChannel);
+
+        const stripId = `strip_${idx}_${route.replace(/\s+/g,'_')}`;
+        const host = document.getElementById(stripId);
+        if (host){
+          host.innerHTML = stripHTML;
+        }
+      });
+    }
+
+    // ============================================================
+    // LANDING / VISIBILITY CONTROL
+    // ============================================================
     function showLandingCarrier() {
       document.getElementById("carrierBlock").style.display = "block";
       document.getElementById("resultsMeta").style.display = "none";
       document.getElementById("resultsContainer").innerHTML = "";
       document.getElementById("noResults").style.display = "none";
+
+      // hide "Carrier" link when carrier table is already in view
+      setCarrierLinkVisible(false);
     }
 
     function hideLandingCarrier() {
       document.getElementById("carrierBlock").style.display = "none";
+      // do NOT force show the link here; only show after successful results build
     }
 
+    // ============================================================
+    // SEARCH HANDLING
+    // ============================================================
     async function performSearch() {
       const input = document.getElementById("postcodeInput").value.trim();
-      const thisToken = ++currentSearchToken;
 
       if (!input) {
         showLandingCarrier();
@@ -913,32 +1317,20 @@
         return;
       }
 
-      if (!ROUTES_SHEET_CSV_URL || ROUTES_SHEET_CSV_URL.includes("PASTE_YOUR_GVIZ_CSV_URL_HERE")){
-        alert("Routes source URL not configured. Please set ROUTES_SHEET_CSV_URL to your Google Sheets GViz CSV link.");
-        return;
-      }
-
       clearResultsForLoading();
-      setLoading(true, "Loading route information…", "Fetching routes…", true);
+      setLoading(true, "Loading route information…", "Fetching routes.");
 
       try{
         await bankHolidaysReady;
 
         const cleaned = normaliseInputPostcode(input);
-
-        // Fetch routes from Google Sheets CSV endpoint (cache-bust added)
-        const routesUrl = `${ROUTES_SHEET_CSV_URL}${ROUTES_SHEET_CSV_URL.includes("?") ? "&" : "?"}cb=${Date.now()}`;
-
-        const res = await fetch(routesUrl, { cache: "no-store" });
-        if (!res.ok) throw new Error("Failed to load routes");
-        const text = await res.text();
+        const text = await fetchRoutesFromSheet();
 
         const routingData = parseRoutes(text);
         const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
 
         if (!bestPrefix) {
-          setLoading(false, null, null, true);
-
+          setLoading(false);
           showLandingCarrier();
           document.getElementById("noResults").style.display = "block";
           document.getElementById("noResults").textContent = "No routing information found for that postcode prefix.";
@@ -949,67 +1341,52 @@
 
         const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
 
-        const grouped = groupByChannel(matchingRows);
-        const channels = Object.keys(grouped);
+        buildResultsHTMLFast(matchingRows, bestPrefix, input);
 
-        const meta = [];
-        let globalFromISO = null;
-        let globalToISO = null;
+        setLoading(false);
 
-        for (const channel of channels){
-          const rowsForChannel = grouped[channel];
-          const route = rowsForChannel[0].route;
-          const leadTime = rowsForChannel[0].leadTime;
-          const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
+        (async () => {
+          try{
+            const grouped = groupByChannel(matchingRows);
+            const channels = Object.keys(grouped);
 
-          const nextDate = findNextDeliveryDate(allDays, leadTime);
-          const stripStart = nextDate || getStartDateConsideringCutoff();
-          const dateCols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+            let globalFromISO = null;
+            let globalToISO = null;
 
-          if (dateCols.length){
-            const fromISO = dateCols[0].iso;
-            const toISO = dateCols[dateCols.length - 1].iso;
+            for (const channel of channels){
+              const rowsForChannel = grouped[channel];
 
-            if (!globalFromISO || fromISO < globalFromISO) globalFromISO = fromISO;
-            if (!globalToISO || toISO > globalToISO) globalToISO = toISO;
-          }
+              const leadTime = rowsForChannel[0].leadTime;
+              const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
 
-          meta.push({
-            channel,
-            route,
-            allDays,
-            leadTime,
-            dateCols,
-            stripId: makeSafeId(channel)
-          });
-        }
+              const nextDate = findNextDeliveryDate(allDays, leadTime);
+              const stripStart = nextDate || getStartDateConsideringCutoff();
+              const cols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
 
-        pendingStripMeta = meta;
+              if (cols.length){
+                const fromISO = cols[0].iso;
+                const toISO = cols[cols.length - 1].iso;
 
-        // Render route info instantly + placeholder status
-        buildResultsHTML(matchingRows, bestPrefix, input, pendingStripMeta);
-
-        // Hide overlay now
-        setLoading(false, null, null, true);
-
-        // Background load live status and then update strips
-        if (globalFromISO && globalToISO){
-          (async () => {
-            try{
-              await loadOverridesForRange(globalFromISO, globalToISO);
-              if (thisToken !== currentSearchToken) return;
-              updateAllStatusStripsFromMeta(pendingStripMeta);
-            }catch(apiErr){
-              console.warn("Route status API not available. Showing defaults:", apiErr);
-              if (thisToken !== currentSearchToken) return;
-              updateAllStatusStripsFromMeta(pendingStripMeta);
+                if (!globalFromISO || fromISO < globalFromISO) globalFromISO = fromISO;
+                if (!globalToISO || toISO > globalToISO) globalToISO = toISO;
+              }
             }
-          })();
-        }
+
+            if (globalFromISO && globalToISO){
+              await loadOverridesForRange(globalFromISO, globalToISO);
+            }
+
+            populateStrips(matchingRows);
+
+          }catch(apiErr){
+            console.warn("Route status API not available. Showing default strips:", apiErr);
+            populateStrips(matchingRows);
+          }
+        })();
 
       }catch(err){
         console.error("Error during search:", err);
-        setLoading(false, null, null, true);
+        setLoading(false);
         showLandingCarrier();
         alert("Routing data is not available at the moment. Please try again in a moment or contact the system owner.");
       }
@@ -1020,6 +1397,331 @@
       if (e.key === "Enter") { e.preventDefault(); performSearch(); }
     });
 
+    // ============================================================
+    // OVERLAY (View-only full grid)
+    // ============================================================
+    const overlayEl = document.getElementById("routesOverlay");
+    const overlayMsgEl = document.getElementById("routesOverlayMsg");
+    const overlayLoadingEl = document.getElementById("routesOverlayLoading");
+    const gridWrapEl = document.getElementById("routesGridWrap");
+    const gridEl = document.getElementById("routesGrid");
+    const refreshBtn = document.getElementById("routesRefreshBtn");
+    const closeBtn = document.getElementById("routesCloseBtn");
+    const openLink = document.getElementById("routesStatusLink");
+
+    let overlayLoadedOnce = false;
+
+    function openOverlay(){
+      overlayEl.style.display = "flex";
+      document.body.style.overflow = "hidden";
+      loadRoutesOverlay(true);
+    }
+
+    function closeOverlay(){
+      overlayEl.style.display = "none";
+      document.body.style.overflow = "";
+    }
+
+    overlayEl.addEventListener("click", (e) => {
+      if (e.target === overlayEl) closeOverlay();
+    });
+    closeBtn.addEventListener("click", closeOverlay);
+    openLink.addEventListener("click", openOverlay);
+    window.addEventListener("keydown", (e) => {
+      if (overlayEl.style.display === "flex" && e.key === "Escape") closeOverlay();
+    });
+
+    refreshBtn.addEventListener("click", () => loadRoutesOverlay(true));
+
+    function showOverlayLoading(isLoading){
+      overlayLoadingEl.style.display = isLoading ? "block" : "none";
+      refreshBtn.disabled = isLoading;
+      overlayMsgEl.style.display = "none";
+      if (isLoading){
+        gridWrapEl.style.display = "none";
+      }
+    }
+
+    function showOverlayError(msg){
+      overlayMsgEl.textContent = msg || "Error loading routes status.";
+      overlayMsgEl.style.display = "block";
+      gridWrapEl.style.display = "none";
+    }
+
+    function setTooltipSide(tooltipEl, preferRight){
+      tooltipEl.style.left = "auto";
+      tooltipEl.style.right = "auto";
+      if (preferRight){
+        tooltipEl.style.left = "0";
+      } else {
+        tooltipEl.style.right = "0";
+      }
+    }
+
+    function adjustAllRouteTooltips(){
+      const routeNameEls = gridEl.querySelectorAll(".routeName");
+      routeNameEls.forEach(nameEl => {
+        const tooltip = nameEl.querySelector(".routeTooltip");
+        if (!tooltip) return;
+
+        setTooltipSide(tooltip, true);
+
+        const rect = nameEl.getBoundingClientRect();
+        const approxWidth = 380;
+        const roomRight = window.innerWidth - rect.left;
+        const roomLeft = rect.right;
+
+        const shouldFlipLeft = (roomRight < approxWidth) && (roomLeft > approxWidth);
+        setTooltipSide(tooltip, !shouldFlipLeft);
+
+        tooltip.style.maxWidth = Math.min(520, Math.max(280, window.innerWidth - 60)) + "px";
+      });
+    }
+
+    window.addEventListener("resize", () => {
+      if (overlayEl.style.display === "flex") adjustAllRouteTooltips();
+    });
+
+    function pad2(n){ return String(n).padStart(2,"0"); }
+    function escapeHTML(s){
+      return String(s ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function normaliseDistrictToken(token){
+      const t = String(token || "").trim().toUpperCase();
+      const m = t.match(/^([A-Z]{1,2})\s*0*(\d{1,2})([A-Z]?)$/);
+      if (!m) return null;
+      const area = m[1];
+      const num = parseInt(m[2], 10);
+      const suffix = m[3] || "";
+      if (!Number.isFinite(num)) return null;
+      return { area, num, suffix, raw: `${area}${num}${suffix}` };
+    }
+
+    function extractDistrictsFromPrefixCell(cell){
+      const text = String(cell || "").toUpperCase();
+      const matches = text.match(/[A-Z]{1,2}\s*0*\d{1,2}[A-Z]?/g) || [];
+      const out = [];
+      for (const m of matches){
+        const d = normaliseDistrictToken(m.replace(/\s+/g,""));
+        if (d) out.push(d);
+      }
+      return out;
+    }
+
+    function groupDistrictsToRanges(districts){
+      const byAreaNums = new Map();
+      const suffixTokens = new Map();
+
+      for (const d of districts){
+        if (!d) continue;
+        if (d.suffix){
+          if (!suffixTokens.has(d.area)) suffixTokens.set(d.area, new Set());
+          suffixTokens.get(d.area).add(d.raw);
+          continue;
+        }
+        if (!byAreaNums.has(d.area)) byAreaNums.set(d.area, new Set());
+        byAreaNums.get(d.area).add(d.num);
+      }
+
+      const parts = [];
+      const areas = Array.from(new Set([...byAreaNums.keys(), ...suffixTokens.keys()]))
+        .sort((a,b)=>a.localeCompare(b,"en-GB"));
+
+      for (const area of areas){
+        const numsSet = byAreaNums.get(area) || new Set();
+        const nums = Array.from(numsSet).sort((a,b)=>a-b);
+
+        if (nums.length){
+          let start = nums[0], prev = nums[0];
+          for (let i=1;i<nums.length;i++){
+            const n = nums[i];
+            if (n === prev + 1){ prev = n; continue; }
+            parts.push(start === prev ? `${area}${start}` : `${area}${start}–${area}${prev}`);
+            start = prev = n;
+          }
+          parts.push(start === prev ? `${area}${start}` : `${area}${start}–${area}${prev}`);
+        }
+
+        const sufSet = suffixTokens.get(area);
+        if (sufSet && sufSet.size){
+          const suf = Array.from(sufSet).sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true}));
+          for (const t of suf) parts.push(t);
+        }
+      }
+
+      const cleaned = parts.map(p => p.replace(/^([A-Z]{1,2}\d+)–\1([A-Z]{1,2})(\d+)$/, "$1–$2$3"));
+      return cleaned.join("; ");
+    }
+
+    function truthy(v){
+      const s = String(v||"").trim().toLowerCase();
+      return !!(s && s !== "0" && s !== "no" && s !== "false" && s !== "n");
+    }
+
+    function weekdayIndexFromName(name){
+      const n = String(name||"").trim().toLowerCase();
+      const map = {
+        "sun":0,"sunday":0,
+        "mon":1,"monday":1,
+        "tue":2,"tues":2,"tuesday":2,
+        "wed":3,"wednesday":3,
+        "thu":4,"thur":4,"thurs":4,"thursday":4,
+        "fri":5,"friday":5,
+        "sat":6,"saturday":6
+      };
+      return (n in map) ? map[n] : null;
+    }
+
+    async function loadRoutesOverlay(force){
+      try{
+        showOverlayLoading(true);
+        overlayLoadedOnce = true;
+
+        await bankHolidaysReady;
+
+        const text = await fetchRoutesFromSheet();
+        const parsed = parseDelimited(text);
+        const rows = parsed.rows || [];
+
+        const targetChannel = String(CONFIG.COMPONENT_CHANNEL_NAME || "").trim().toLowerCase();
+        const schedule = new Map();
+        const routeDistricts = new Map();
+
+        function parseRunDaysFromRow(r){
+          const daysStr = String(r.days || "").trim();
+          if (daysStr){
+            const set = new Set();
+            daysStr.split("|").map(x=>x.trim()).filter(Boolean).forEach(dayName => {
+              const idx = weekdayIndexFromName(dayName);
+              if (idx !== null) set.add(idx);
+            });
+            return set;
+          }
+          const set = new Set();
+          for (const k of Object.keys(r)){
+            const idx = weekdayIndexFromName(k);
+            if (idx !== null && truthy(r[k])) set.add(idx);
+          }
+          return set;
+        }
+
+        for (const r of rows){
+          const channel = String(r.channel || "").trim().toLowerCase();
+          if (targetChannel && channel !== targetChannel) continue;
+
+          const route = String(r.route || "").trim();
+          if (!route) continue;
+
+          if (route.toUpperCase().startsWith("3PLCO")) continue;
+          if (route.length <= 5) continue;
+
+          const days = parseRunDaysFromRow(r);
+          if (days.size){
+            if (!schedule.has(route)) schedule.set(route, days);
+          }
+
+          const prefixCell = r.prefix || "";
+          if (!routeDistricts.has(route)) routeDistricts.set(route, []);
+          routeDistricts.get(route).push(...extractDistrictsFromPrefixCell(prefixCell));
+        }
+
+        if (schedule.size === 0){
+          showOverlayLoading(false);
+          showOverlayError(`No route schedules could be inferred for "${CONFIG.COMPONENT_CHANNEL_NAME}".`);
+          return;
+        }
+
+        const routePostcodeGroups = new Map();
+        for (const [route, districts] of routeDistricts.entries()){
+          routePostcodeGroups.set(route, groupDistrictsToRanges(districts));
+        }
+
+        const start = getOverlayGridStartDate();
+        const dateCols = buildWorkingDateColsFrom(start, CONFIG.DAYS_AHEAD);
+        if (!dateCols.length){
+          showOverlayLoading(false);
+          showOverlayError("No working-day columns could be generated.");
+          return;
+        }
+
+        try{
+          await loadOverridesForRange(dateCols[0].iso, dateCols[dateCols.length - 1].iso);
+        }catch(err){
+          console.warn("Overlay: status API failed; showing defaults", err);
+          overridesMap.clear();
+        }
+
+        const routes = Array.from(schedule.keys())
+          .sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
+
+        let html = "<thead><tr>";
+        html += `<th class="routeHead">Route</th>`;
+        for (const c of dateCols){
+          html += `<th>${c.head}</th>`;
+        }
+        html += "</tr></thead><tbody>";
+
+        for (const route of routes){
+          html += `<tr>`;
+          const groups = routePostcodeGroups.get(route) || "";
+          html += `
+            <td class="routeCell">
+              <span class="routeName">
+                ${escapeHTML(route)}
+                <span class="routeTooltip">
+                  <div class="routeTooltipTitle">Postcode groups</div>
+                  <div class="routeTooltipBody">${escapeHTML(groups || "No postcode groups found for this route.")}</div>
+                </span>
+              </span>
+            </td>
+          `;
+
+          const runDays = schedule.get(route) || new Set();
+
+          for (const c of dateCols){
+            const runs = runDays.has(c.weekday);
+            if (!runs){
+              html += `<td class="gridInactive"></td>`;
+              continue;
+            }
+            const ov = overridesMap.get(ovKey(c.iso, route));
+            let cls = "gridAvailable";
+            let txt = STATUS.AVAILABLE;
+
+            if (ov === STATUS.FULL_WEIGHT){ cls = "gridFullWeight"; txt = STATUS.FULL_WEIGHT; }
+            else if (ov === STATUS.FULL_DROPS){ cls = "gridFullDrops"; txt = STATUS.FULL_DROPS; }
+            else if (ov === STATUS.AVAILABLE){ cls = "gridAvailable"; txt = STATUS.AVAILABLE; }
+
+            html += `<td class="${cls}">${escapeHTML(txt)}</td>`;
+          }
+
+          html += `</tr>`;
+        }
+
+        html += "</tbody>";
+        gridEl.innerHTML = html;
+
+        gridWrapEl.style.display = "block";
+        showOverlayLoading(false);
+
+        adjustAllRouteTooltips();
+
+      }catch(err){
+        console.error(err);
+        showOverlayLoading(false);
+        showOverlayError("Error loading routes status. Please try Refresh.");
+      }
+    }
+
+    // ============================================================
+    // INIT
+    // ============================================================
     (function init() {
       loadChannelRules();
 
@@ -1028,14 +1730,14 @@
 
       bankHolidaysReady = loadBankHolidays().finally(() => {
         btn.disabled = false;
-
         computeCarrierNextDates();
         setInterval(computeCarrierNextDates, 60 * 1000);
         window.addEventListener("focus", computeCarrierNextDates);
       });
 
-      showLandingCarrier();
+      showLandingCarrier(); // also hides the Carrier link
     })();
   </script>
 </body>
 </html>
+
