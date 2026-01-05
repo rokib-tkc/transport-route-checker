@@ -347,11 +347,15 @@
     }
 
     .overlayBody{
-      padding: 12px 12px;
+      padding: 0;
       overflow: auto;
       background: #fafafa;
       flex: 1;
     }
+    .overlayBodyInner{
+    padding: 12px 12px;
+    }
+
 
     .overlayLoadingRow{
       display:flex;
@@ -414,6 +418,11 @@
     background: var(--header);
     font-weight: 800;
     font-size: 13px;
+    box-shadow: 0 2px 0 #ddd;
+    }
+    
+    .routesGrid thead .routeHead{
+    z-index: 90; 
     }
 
     .routesGrid .routeHead{
@@ -434,10 +443,6 @@
       text-align: left;
       padding: 8px 10px;
       overflow: visible;
-    }
-    
-    .routesGrid thead .routeHead{
-    z-index: 90; /* top-left cell above header and left sticky column */
     }
 
 
@@ -535,22 +540,25 @@
         </div>
       </div>
 
-      <div class="overlayBody">
-        <div id="routesOverlayLoading" style="display:none;">
-          <div class="overlayLoadingRow">
-            <div class="overlaySpinner" aria-hidden="true"></div>
-            <div class="overlayLoadingText">Loading routes and live status…</div>
-          </div>
-        </div>
-
-        <div class="routesGridWrap" id="routesGridWrap" style="display:none;">
-          <table class="routesGrid" id="routesGrid"></table>
-        </div>
-
-        <div id="routesOverlayMsg" style="display:none;margin:10px auto;max-width:720px;font-size:13px;color:#a00;background:#ffe5e5;padding:10px 12px;border-radius:8px;border:1px solid #f3bcbc;">
-          Error loading routes status.
-        </div>
+    <div class="overlayBody">
+  <div class="overlayBodyInner">
+    <div id="routesOverlayLoading" style="display:none;">
+      <div class="overlayLoadingRow">
+        <div class="overlaySpinner" aria-hidden="true"></div>
+        <div class="overlayLoadingText">Loading routes and live status…</div>
       </div>
+    </div>
+
+    <div class="routesGridWrap" id="routesGridWrap" style="display:none;">
+      <table class="routesGrid" id="routesGrid"></table>
+    </div>
+
+    <div id="routesOverlayMsg" style="display:none;margin:10px auto;max-width:720px;font-size:13px;color:#a00;background:#ffe5e5;padding:10px 12px;border-radius:8px;border:1px solid #f3bcbc;">
+      Error loading routes status.
+    </div>
+  </div>
+</div>
+
     </div>
   </div>
 
@@ -1700,4 +1708,5 @@
   </script>
 </body>
 </html>
+
 
