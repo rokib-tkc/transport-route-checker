@@ -21,6 +21,22 @@
       position: relative;
     }
 
+    /* Top-left link (Carrier) */
+    .top-link-left{
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      font-size: 13px;
+      font-weight: 800;
+      color: #0078d4;
+      text-decoration: underline;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      display: none; /* hidden on landing (carrier shown), shown only after a successful search */
+    }
+    .top-link-left:hover{ color:#005ea3; }
+
     /* Top-right link (Routes Status) */
     .top-link {
       position: absolute;
@@ -343,7 +359,7 @@
     }
     .overlayClose:hover{
       background:#0078d4;
-      color:#fff; /* requested: white on hover */
+      color:#fff;
     }
 
     .overlayBody{
@@ -353,9 +369,8 @@
       flex: 1;
     }
     .overlayBodyInner{
-    padding: 12px 12px;
+      padding: 12px 12px;
     }
-
 
     .overlayLoadingRow{
       display:flex;
@@ -388,7 +403,7 @@
       border: 1px solid #e0e0e0;
       border-radius: 10px;
       background: #fff;
-      overflow: visible; /* IMPORTANT: do not clip tooltips */
+      overflow: visible;
     }
 
     table.routesGrid{
@@ -412,17 +427,16 @@
       white-space: normal;
     }
     .routesGrid thead th{
-    position: sticky;
-    top: 0;
-    z-index: 70;
-    background: var(--header);
-    font-weight: 700;
-    font-size: 15.5px;
-    box-shadow: 0 2px 0 #ddd;
+      position: sticky;
+      top: 0;
+      z-index: 70;
+      background: var(--header);
+      font-weight: 700;
+      font-size: 15.5px;
+      box-shadow: 0 2px 0 #ddd;
     }
-    
     .routesGrid thead .routeHead{
-    z-index: 90; 
+      z-index: 90;
     }
 
     .routesGrid .routeHead{
@@ -445,7 +459,6 @@
       overflow: visible;
     }
 
-
     /* Match Route Checker palette */
     .gridInactive{ background: var(--inactive); color:#555; }
     .gridAvailable{ background: var(--green); color:#1f6b3a; font-weight:700; }
@@ -465,7 +478,7 @@
     .routeTooltip{
       position: absolute;
       top: calc(100% + 8px);
-      z-index: 1000005; /* must beat sticky + overlay layers */
+      z-index: 1000005;
       min-width: 280px;
       max-width: 520px;
       background: #fff;
@@ -498,7 +511,6 @@
       color: #333;
     }
 
-    /* ensure hovered row is on top */
     .routesGrid tbody{ position: relative; z-index: 1; }
     .routesGrid tbody tr:hover{ position: relative; z-index: 80; }
     .routesGrid .routeCell:hover{ z-index: 90; }
@@ -517,6 +529,7 @@
       .status-strip .statusCell{ font-size: 12px; }
 
       .top-link{ right: 12px; }
+      .top-link-left{ left: 12px; }
     }
   </style>
 </head>
@@ -542,29 +555,33 @@
         </div>
       </div>
 
-    <div class="overlayBody">
-  <div class="overlayBodyInner">
-    <div id="routesOverlayLoading" style="display:none;">
-      <div class="overlayLoadingRow">
-        <div class="overlaySpinner" aria-hidden="true"></div>
-        <div class="overlayLoadingText">Loading routes and live status…</div>
+      <div class="overlayBody">
+        <div class="overlayBodyInner">
+          <div id="routesOverlayLoading" style="display:none;">
+            <div class="overlayLoadingRow">
+              <div class="overlaySpinner" aria-hidden="true"></div>
+              <div class="overlayLoadingText">Loading routes and live status…</div>
+            </div>
+          </div>
+
+          <div class="routesGridWrap" id="routesGridWrap" style="display:none;">
+            <table class="routesGrid" id="routesGrid"></table>
+          </div>
+
+          <div id="routesOverlayMsg" style="display:none;margin:10px auto;max-width:720px;font-size:13px;color:#a00;background:#ffe5e5;padding:10px 12px;border-radius:8px;border:1px solid #f3bcbc;">
+            Error loading routes status.
+          </div>
+        </div>
       </div>
-    </div>
-
-    <div class="routesGridWrap" id="routesGridWrap" style="display:none;">
-      <table class="routesGrid" id="routesGrid"></table>
-    </div>
-
-    <div id="routesOverlayMsg" style="display:none;margin:10px auto;max-width:720px;font-size:13px;color:#a00;background:#ffe5e5;padding:10px 12px;border-radius:8px;border:1px solid #f3bcbc;">
-      Error loading routes status.
-    </div>
-  </div>
-</div>
 
     </div>
   </div>
 
   <div class="container">
+    <!-- NEW: Top-left link (Carrier) -->
+    <div class="top-link-left" id="carrierLink">Carrier</div>
+
+    <!-- Existing: Top-right link (Routes Status) -->
     <div class="top-link" id="routesStatusLink">Routes Status</div>
 
     <h1>Transport Route Checker</h1>
@@ -642,6 +659,21 @@
       FULL_DROPS: "Full - On Drops",
       CLOSED: "Closed"
     };
+
+    // ============================================================
+    // NEW: CARRIER LINK SHOW/HIDE + REFRESH
+    // ============================================================
+    const carrierLinkEl = document.getElementById("carrierLink");
+
+    function setCarrierLinkVisible(isVisible){
+      carrierLinkEl.style.display = isVisible ? "block" : "none";
+    }
+
+    // Click = refresh page back to landing
+    carrierLinkEl.addEventListener("click", () => {
+      // Hard refresh to ensure carrier dates + state reset
+      window.location.reload();
+    });
 
     // ============================================================
     // MAIN SEARCH LOADING UI HELPERS
@@ -866,10 +898,9 @@
       return `${day} ${dateStr}`;
     }
 
-    // Existing route checker booking/cutoff start (used for next-delivery + strips)
     function getStartDateConsideringCutoff() {
       const now = new Date();
-      const cutoffHour = 14; // 2pm
+      const cutoffHour = 14;
 
       let start = startOfDay(now);
 
@@ -885,17 +916,12 @@
       return start;
     }
 
-    // NEW (requested): overlay grid date window starts from NEXT DAY onwards
-    // - If before 2pm: first column = next working day
-    // - If after 2pm: first column = following working day (i.e. skip next working day)
     function getOverlayGridStartDate() {
       const now = new Date();
       const cutoffHour = 14;
 
       let today = startOfDay(now);
 
-      // if today is not a working day, treat "today" as next working day for rule purposes,
-      // then apply "next day onwards" from there.
       if (!isWorkingDay(today)) {
         today = nextWorkingDay(today);
       }
@@ -904,12 +930,10 @@
         (now.getHours() > cutoffHour) ||
         (now.getHours() === cutoffHour && now.getMinutes() > 0);
 
-      const first = nextWorkingDay(today);          // next working day
-      return afterCutoff ? nextWorkingDay(first)    // following working day
-                         : first;                   // next working day
+      const first = nextWorkingDay(today);
+      return afterCutoff ? nextWorkingDay(first) : first;
     }
 
-    // Build N WORKING DAYS (exclude weekends + bank holidays), starting from given date (must be working day).
     function buildWorkingDateColsFrom(startDate, n){
       const cols = [];
       let d = startOfDay(startDate);
@@ -932,7 +956,6 @@
       return cols;
     }
 
-    // Carrier next dates
     function computeCarrierNextDates() {
       const start = getStartDateConsideringCutoff();
       const overnight = addWorkingDays(start, 1);
@@ -1118,7 +1141,6 @@
         const nextDate = findNextDeliveryDate(allDays, leadTime);
         const nextDeliveryText = nextDate ? formatDayDate(nextDate) : "";
 
-        // placeholder container to populate later
         const stripId = `strip_${idx}_${route.replace(/\s+/g,'_')}`;
 
         html += `
@@ -1165,6 +1187,9 @@
 
       resultsContainer.innerHTML = html;
       attachChannelRuleEvents();
+
+      // NEW: show "Carrier" link only once user is in results mode
+      setCarrierLinkVisible(true);
     }
 
     function attachChannelRuleEvents() {
@@ -1204,7 +1229,6 @@
       });
     }
 
-    // After overrides are available: replace placeholders with actual strips
     function populateStrips(rows){
       const grouped = groupByChannel(rows);
       const channels = Object.keys(grouped).sort();
@@ -1226,7 +1250,7 @@
         const stripId = `strip_${idx}_${route.replace(/\s+/g,'_')}`;
         const el = document.getElementById(stripId);
         if (el){
-          el.outerHTML = stripHTML; // replace placeholder div with strip
+          el.outerHTML = stripHTML;
         }
       });
     }
@@ -1239,10 +1263,14 @@
       document.getElementById("resultsMeta").style.display = "none";
       document.getElementById("resultsContainer").innerHTML = "";
       document.getElementById("noResults").style.display = "none";
+
+      // NEW: hide "Carrier" link when carrier table is already in view
+      setCarrierLinkVisible(false);
     }
 
     function hideLandingCarrier() {
       document.getElementById("carrierBlock").style.display = "none";
+      // do NOT force show the link here; only show after successful results build
     }
 
     // ============================================================
@@ -1282,13 +1310,10 @@
 
         const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
 
-        // Build FIRST TABLES immediately
         buildResultsHTMLFast(matchingRows, bestPrefix, input);
 
-        // Hide spinner ASAP so user can see route checker info
         setLoading(false);
 
-        // In the background: load overrides and then populate strips
         (async () => {
           try{
             const grouped = groupByChannel(matchingRows);
@@ -1324,7 +1349,6 @@
 
           }catch(apiErr){
             console.warn("Route status API not available. Leaving strips as loading/default:", apiErr);
-            // If API fails, still show default "Available" cells by populating with empty overridesMap.
             populateStrips(matchingRows);
           }
         })();
@@ -1359,7 +1383,6 @@
     function openOverlay(){
       overlayEl.style.display = "flex";
       document.body.style.overflow = "hidden";
-      // lazy load on open (unless already loaded)
       if (!overlayLoadedOnce) loadRoutesOverlay(true);
     }
 
@@ -1394,11 +1417,9 @@
       gridWrapEl.style.display = "none";
     }
 
-    // --- Tooltip positioning: open right by default, flip left if needed (requested)
     function setTooltipSide(tooltipEl, preferRight){
       tooltipEl.style.left = "auto";
       tooltipEl.style.right = "auto";
-
       if (preferRight){
         tooltipEl.style.left = "0";
       } else {
@@ -1407,26 +1428,21 @@
     }
 
     function adjustAllRouteTooltips(){
-      // After grid render: set tooltip side based on available viewport room.
       const routeNameEls = gridEl.querySelectorAll(".routeName");
       routeNameEls.forEach(nameEl => {
         const tooltip = nameEl.querySelector(".routeTooltip");
         if (!tooltip) return;
 
-        // default to open RIGHT (aligned with left edge of route cell)
         setTooltipSide(tooltip, true);
 
-        // measure on hover: we also do a pre-check based on current layout
         const rect = nameEl.getBoundingClientRect();
-        const approxWidth = 380; // average tooltip width (min 280, max 520)
+        const approxWidth = 380;
         const roomRight = window.innerWidth - rect.left;
         const roomLeft = rect.right;
 
-        // If not enough room to the right but enough to the left, flip.
         const shouldFlipLeft = (roomRight < approxWidth) && (roomLeft > approxWidth);
         setTooltipSide(tooltip, !shouldFlipLeft);
 
-        // Also clamp so it doesn't spill off-screen on tiny widths
         tooltip.style.maxWidth = Math.min(520, Math.max(280, window.innerWidth - 60)) + "px";
       });
     }
@@ -1435,9 +1451,7 @@
       if (overlayEl.style.display === "flex") adjustAllRouteTooltips();
     });
 
-    // --- Admin-style postcode group building (view-only)
     function pad2(n){ return String(n).padStart(2,"0"); }
-    function toISODate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
     function escapeHTML(s){
       return String(s ?? "")
         .replaceAll("&","&amp;")
@@ -1533,7 +1547,6 @@
       return (n in map) ? map[n] : null;
     }
 
-    // Build view-only overlay grid (schedule inferred from COMPONENT_CHANNEL_NAME like admin)
     async function loadRoutesOverlay(force){
       try{
         showOverlayLoading(true);
@@ -1541,20 +1554,15 @@
 
         await bankHolidaysReady;
 
-        // 1) Load routes from Google sheet
         const text = await fetchRoutesFromSheet();
         const parsed = parseDelimited(text);
         const rows = parsed.rows || [];
 
-        // 2) Filter to component channel to infer schedules / postcode groups
         const targetChannel = String(CONFIG.COMPONENT_CHANNEL_NAME || "").trim().toLowerCase();
-        const schedule = new Map(); // route -> Set(weekdayIndex)
-        const routeDistricts = new Map(); // route -> districts array
+        const schedule = new Map();
+        const routeDistricts = new Map();
 
-        // Try to support either boolean weekday columns OR "days" column used in checker
-        // (your sheet for checker uses "days" pipe list, so we parse that too)
         function parseRunDaysFromRow(r){
-          // If "days" exists: it's day names separated by | (Mon..)
           const daysStr = String(r.days || "").trim();
           if (daysStr){
             const set = new Set();
@@ -1564,7 +1572,6 @@
             });
             return set;
           }
-          // Otherwise, look for columns named Mon/Tue/... with truthy values
           const set = new Set();
           for (const k of Object.keys(r)){
             const idx = weekdayIndexFromName(k);
@@ -1580,7 +1587,6 @@
           const route = String(r.route || "").trim();
           if (!route) continue;
 
-          // ignore 3PLCO and short codes like admin
           if (route.toUpperCase().startsWith("3PLCO")) continue;
           if (route.length <= 5) continue;
 
@@ -1600,13 +1606,11 @@
           return;
         }
 
-        // 3) Build tooltip postcode groups
         const routePostcodeGroups = new Map();
         for (const [route, districts] of routeDistricts.entries()){
           routePostcodeGroups.set(route, groupDistrictsToRanges(districts));
         }
 
-        // 4) Build date columns from "next day onwards" cut-off rule (requested)
         const start = getOverlayGridStartDate();
         const dateCols = buildWorkingDateColsFrom(start, CONFIG.DAYS_AHEAD);
         if (!dateCols.length){
@@ -1615,7 +1619,6 @@
           return;
         }
 
-        // 5) Load overrides for that date window
         try{
           await loadOverridesForRange(dateCols[0].iso, dateCols[dateCols.length - 1].iso);
         }catch(err){
@@ -1623,7 +1626,6 @@
           overridesMap.clear();
         }
 
-        // 6) Render grid (view-only)
         const routes = Array.from(schedule.keys())
           .sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
 
@@ -1664,7 +1666,6 @@
             if (ov === STATUS.FULL_WEIGHT){ cls = "gridFullWeight"; txt = STATUS.FULL_WEIGHT; }
             else if (ov === STATUS.FULL_DROPS){ cls = "gridFullDrops"; txt = STATUS.FULL_DROPS; }
             else if (ov === STATUS.AVAILABLE){ cls = "gridAvailable"; txt = STATUS.AVAILABLE; }
-            // no "Closed" concept on this overlay grid (admin doesn't show Closed); we keep default available
 
             html += `<td class="${cls}">${escapeHTML(txt)}</td>`;
           }
@@ -1675,11 +1676,9 @@
         html += "</tbody>";
         gridEl.innerHTML = html;
 
-        // Show only the table (no "Ready" message)
         gridWrapEl.style.display = "block";
         showOverlayLoading(false);
 
-        // Apply tooltip side logic (open to right, flip if needed)
         adjustAllRouteTooltips();
 
       }catch(err){
@@ -1705,16 +1704,8 @@
         window.addEventListener("focus", computeCarrierNextDates);
       });
 
-      showLandingCarrier();
+      showLandingCarrier(); // also hides the Carrier link
     })();
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
