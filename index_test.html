@@ -407,9 +407,13 @@
       overflow-wrap: break-word;
       white-space: normal;
     }
-    .routesGrid th{
-      background: var(--header);
-      font-weight: 800;
+    .routesGrid thead th{
+    position: sticky;
+    top: 0;
+    z-index: 70;
+    background: var(--header);
+    font-weight: 800;
+    font-size: 13px;
     }
 
     .routesGrid .routeHead{
@@ -431,6 +435,11 @@
       padding: 8px 10px;
       overflow: visible;
     }
+    
+    .routesGrid thead .routeHead{
+    z-index: 90; /* top-left cell above header and left sticky column */
+    }
+
 
     /* Match Route Checker palette */
     .gridInactive{ background: var(--inactive); color:#555; }
@@ -1691,3 +1700,4 @@
   </script>
 </body>
 </html>
+
