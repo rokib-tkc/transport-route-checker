@@ -17,3 +17,6 @@ https://rokib-tkc.github.io/transport-route-checker/channel-rules-editor
 
 Delete outdated channel_rules.csv from repo then reupload updated CSV to repo:
 https://github.com/rokib-tkc/transport-route-checker/tree/main
+
+U: tkcrokib@gmail.com
+P: Lightnest77!
