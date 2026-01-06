@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Routes Editor (Search-first)</title>
+  <title>Routes Editor (Search-first + Routes Manager)</title>
   <style>
     * { box-sizing:border-box; font-family: Arial, sans-serif; }
     body { margin:0; padding:18px; background:#f5f5f5; color:#222; }
@@ -25,6 +25,8 @@
     button:disabled { background:#9bbbd7; cursor:not-allowed; }
     .mini-btn { background:#444 !important; padding:7px 10px !important; }
     .mini-btn:hover { background:#333 !important; }
+    .danger { background:#b00020 !important; }
+    .danger:hover { background:#8b001a !important; }
     .muted { font-size:12px; color:#666; }
     .status { font-size:12px; padding:8px 10px; border-radius:6px; background:#f0f7ff; border:1px solid #d6eaff; }
     .status.bad { background:#ffecec; border-color:#ffd0d0; color:#900; }
@@ -44,25 +46,61 @@
     .pager { display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap; }
     .pager .box { background:#fafafa; border:1px solid #e6e6e6; border-radius:10px; padding:10px; }
     .pager .num { font-weight:700; }
+
+    /* Modal */
+    .modal-backdrop {
+      position:fixed; inset:0;
+      background: rgba(0,0,0,.35);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding: 18px;
+      z-index: 999;
+    }
+    .modal {
+      width: min(900px, 100%);
+      background:#fff;
+      border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.25);
+      overflow:hidden;
+      border:1px solid #e6e6e6;
+    }
+    .modal header {
+      padding: 12px 14px;
+      background:#f7f7f7;
+      border-bottom:1px solid #e6e6e6;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .modal header h2 { margin:0; font-size:16px; }
+    .modal .content { padding: 14px; }
+    .modal .footer { padding: 12px 14px; border-top:1px solid #e6e6e6; display:flex; gap:10px; justify-content:flex-end; }
+    .chkgrid { display:flex; flex-wrap:wrap; gap:10px; }
+    .chkgrid label { font-weight:normal; font-size:12px; margin:0; display:flex; align-items:center; gap:6px; }
+    .split { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    .panel { border:1px solid #e6e6e6; border-radius:10px; padding:12px; background:#fff; }
+    .input-full { width:100% !important; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Routes Editor <span class="pill">Search-first (fast)</span></h1>
+    <h1>Routes Editor <span class="pill">Range search + route dropdown + selected-row updates</span></h1>
 
     <div class="row">
       <div class="status" id="statusBox">Loading meta…</div>
       <div class="toolbar-right">
+        <button id="routesManagerBtn" class="mini-btn">Routes</button>
         <button id="reloadMetaBtn">Reload meta</button>
-        <button id="saveSelectedBtn" disabled>Save selected edits</button>
+        <button id="saveEditsBtn" disabled>Save edits</button>
       </div>
     </div>
 
     <div class="group">
       <div class="row">
         <div style="min-width:260px;">
-          <div class="muted"><strong>How it works</strong></div>
-          <div class="muted">No rows are loaded until you search. Bulk updates run server-side (no 11k table).</div>
+          <div class="muted"><strong>Search (required)</strong></div>
+          <div class="muted">Enter a prefix range. Use the same value in both boxes to view a single prefix.</div>
         </div>
 
         <div>
@@ -73,13 +111,20 @@
         </div>
 
         <div>
-          <label>Prefix contains</label>
-          <input id="filterPrefix" type="text" placeholder="e.g. AB1" class="small"/>
+          <label>Route (optional)</label>
+          <select id="filterRouteExact" class="wide">
+            <option value="">(any route)</option>
+          </select>
         </div>
 
         <div>
-          <label>Route contains</label>
-          <input id="filterRoute" type="text" placeholder="e.g. TKC01" class="wide"/>
+          <label>From prefix</label>
+          <input id="rangeFrom" type="text" class="small" placeholder="e.g. AB10 or AB"/>
+        </div>
+
+        <div>
+          <label>To prefix</label>
+          <input id="rangeTo" type="text" class="small" placeholder="e.g. AB14 or AC"/>
         </div>
 
         <div>
@@ -96,38 +141,13 @@
           <button id="searchBtn">Search</button>
         </div>
       </div>
-
-      <div class="row" style="align-items:flex-end;">
-        <div>
-          <label>Prefix range (optional)</label>
-          <div class="muted">Use for range searches or range bulk update.</div>
-        </div>
-        <div>
-          <label>From</label>
-          <input id="rangeFrom" type="text" class="small" placeholder="e.g. AB10 or AB"/>
-        </div>
-        <div>
-          <label>To</label>
-          <input id="rangeTo" type="text" class="small" placeholder="e.g. AB14 or AC"/>
-        </div>
-        <div class="muted">Leave blank to ignore range.</div>
-      </div>
     </div>
 
     <div class="group" style="margin-top:12px;">
-      <div class="row" style="align-items:flex-end;">
-        <div style="min-width:240px;">
-          <div class="muted"><strong>Bulk update (server-side)</strong></div>
-          <div class="muted">Applies without loading every matching row.</div>
-        </div>
-
-        <div>
-          <label>Bulk mode</label>
-          <select id="bulkMode">
-            <option value="filtered">Filtered results (entire match)</option>
-            <option value="range">Prefix range (entire match)</option>
-            <option value="selected">Ticked rows (this page)</option>
-          </select>
+      <div class="row">
+        <div style="min-width:260px;">
+          <div class="muted"><strong>Apply changes to selected rows</strong></div>
+          <div class="muted">Load results → tick the rows you want → apply fields → Save edits.</div>
         </div>
 
         <div>
@@ -152,11 +172,19 @@
         </div>
 
         <div>
-          <button id="runBulkBtn">Run bulk update</button>
+          <button id="applyToSelectedBtn">Apply to selected</button>
         </div>
 
         <div class="muted" style="flex-basis:100%;">
-          Delivery days remain route-defined and are updated automatically by the API.
+          Days are route-defined. Changing a row’s Route will automatically set its Days.
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="muted">
+          <strong>Selection:</strong>
+          <button id="tickAllBtn" class="mini-btn">Tick all visible</button>
+          <button id="untickAllBtn" class="mini-btn" style="background:#666 !important;">Untick all visible</button>
         </div>
       </div>
     </div>
@@ -181,24 +209,84 @@
     </div>
 
     <div class="pager" id="pager" style="display:none;">
-      <div class="box">
-        Results: <span class="num" id="totalCount">0</span>
-      </div>
+      <div class="box">Results: <span class="num" id="totalCount">0</span></div>
       <button class="mini-btn" id="prevBtn">Prev</button>
       <button class="mini-btn" id="nextBtn">Next</button>
-      <div class="box">
-        Page offset: <span class="num" id="offsetTxt">0</span>
-      </div>
+      <div class="box">Offset: <span class="num" id="offsetTxt">0</span></div>
     </div>
 
     <div class="muted" style="margin-top:10px;">
-      Prefix + Channel are locked. Days are route-defined. No add/delete rows.
+      Prefix + Channel are locked. No add/delete rows. Days are route-defined.
+    </div>
+  </div>
+
+  <!-- Routes Manager Modal -->
+  <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <header>
+        <h2>Routes</h2>
+        <span class="pill">Edit days + scope</span>
+        <div class="toolbar-right" style="margin-left:auto;">
+          <button id="closeModalBtn" class="mini-btn">Close</button>
+        </div>
+      </header>
+
+      <div class="content">
+        <div class="split">
+          <div class="panel">
+            <label>Select route to edit</label>
+            <select id="routePick" class="input-full"></select>
+
+            <div style="margin-top:12px;">
+              <label>Delivery days</label>
+              <div class="chkgrid" id="daysChecks"></div>
+            </div>
+
+            <div style="margin-top:12px;">
+              <label>Scope</label>
+              <div class="muted">Choose ALL channels, or tick specific channels.</div>
+              <div class="chkgrid" style="margin-top:8px;">
+                <label><input type="checkbox" id="scopeAllChk"> ALL channels</label>
+              </div>
+              <div class="chkgrid" id="scopeChannels" style="margin-top:8px;"></div>
+            </div>
+
+            <div class="muted" style="margin-top:10px;">
+              Saving route changes will update the <strong>Days</strong> column for all rows using that route.
+            </div>
+          </div>
+
+          <div class="panel">
+            <label>Add new route</label>
+            <input id="newRouteName" class="input-full" type="text" placeholder="e.g. TKC01 Aberdeen O/N" />
+            <div class="muted" style="margin-top:6px;">New routes default to Monday + ALL channels (you can change it before saving).</div>
+            <div class="row" style="margin-top:10px;">
+              <button id="addRouteBtn">Add</button>
+            </div>
+
+            <hr style="border:0;border-top:1px solid #e8e8e8;margin:12px 0;">
+
+            <div class="muted"><strong>Delete route</strong></div>
+            <div class="muted">Deletion is blocked if any postcode rows still use the route.</div>
+            <div class="row" style="margin-top:10px;">
+              <button id="deleteRouteBtn" class="danger">Delete selected route</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <button id="discardRouteBtn" class="mini-btn" style="background:#666 !important;">Discard</button>
+        <button id="saveRouteBtn">Save route changes</button>
+      </div>
     </div>
   </div>
 
   <script>
+    /************* CONFIG *************/
     const API_BASE = "https://script.google.com/macros/s/AKfycby2UaJDmzrkxCm27BA4rH3Fo5xHaHk9lWENv7NvxJWHa0L-P2T_SVJPkMagdNX3QDNvLw/exec";
 
+    /************* JSONP *************/
     function jsonp(url) {
       return new Promise((resolve, reject) => {
         const cbName = "cb_" + Math.random().toString(36).slice(2);
@@ -221,22 +309,19 @@
       statusBox.classList.toggle("bad", !!bad);
     }
 
-    // Meta
+    /************* STATE *************/
     let channels = [];
     let routeMeta = {};
-    let metaVersion = "";
-
-    // Current page data
     let rows = [];
     let total = 0;
     let offset = 0;
 
-    // Edits on current page only (selected save)
+    // edits staged (across pages if you want; here we keep them even if you page)
     const dirty = new Map(); // key prefix||channel -> {prefix,channel,route,serviceType,leadTime}
 
+    /************* ELEMENTS *************/
     const filterChannel = document.getElementById("filterChannel");
-    const filterPrefix = document.getElementById("filterPrefix");
-    const filterRoute = document.getElementById("filterRoute");
+    const filterRouteExact = document.getElementById("filterRouteExact");
     const rangeFrom = document.getElementById("rangeFrom");
     const rangeTo = document.getElementById("rangeTo");
     const pageSize = document.getElementById("pageSize");
@@ -248,80 +333,80 @@
     const prevBtn = document.getElementById("prevBtn");
     const nextBtn = document.getElementById("nextBtn");
 
-    const saveSelectedBtn = document.getElementById("saveSelectedBtn");
+    const saveEditsBtn = document.getElementById("saveEditsBtn");
+    const masterCheck = document.getElementById("masterCheck");
 
-    const bulkMode = document.getElementById("bulkMode");
     const bulkRoute = document.getElementById("bulkRoute");
     const bulkServiceType = document.getElementById("bulkServiceType");
     const bulkLeadTime = document.getElementById("bulkLeadTime");
 
-    const masterCheck = document.getElementById("masterCheck");
-
-    function markDirty(){
-      saveSelectedBtn.disabled = (dirty.size === 0);
-    }
-
-    function rebuildRouteDropdown(){
-      bulkRoute.innerHTML = "";
-      bulkRoute.appendChild(new Option("(no change)", ""));
-      Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b)).forEach(r => {
-        bulkRoute.appendChild(new Option(r, r));
-      });
-    }
-
+    /************* META LOAD *************/
     async function loadMeta(){
-      setStatus("Loading meta (channels/routes)...");
+      setStatus("Loading channels/routes…");
       const res = await jsonp(`${API_BASE}?action=meta&cb=${Date.now()}`);
       if (!res || !res.ok) throw new Error(res && res.error ? res.error : "Meta load failed");
 
       channels = res.channels || [];
       routeMeta = res.routeMeta || {};
-      metaVersion = res.version || "";
 
+      // channels dropdown
       filterChannel.innerHTML = `<option value="ALL">ALL</option>`;
       channels.forEach(ch => filterChannel.appendChild(new Option(ch, ch)));
 
-      rebuildRouteDropdown();
-      setStatus("Meta loaded. Enter filters and click Search.");
+      // route dropdowns (search + bulk)
+      rebuildRouteDropdowns();
+
+      // routes modal
+      rebuildRoutesModalPicklist();
+
+      setStatus("Ready. Enter a prefix range and search.");
     }
 
+    function rebuildRouteDropdowns(){
+      const routes = Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b));
+
+      filterRouteExact.innerHTML = `<option value="">(any route)</option>`;
+      routes.forEach(r => filterRouteExact.appendChild(new Option(r, r)));
+
+      bulkRoute.innerHTML = `<option value="">(no change)</option>`;
+      routes.forEach(r => bulkRoute.appendChild(new Option(r, r)));
+    }
+
+    /************* SEARCH *************/
     function currentSearchParams(){
       return {
         channel: filterChannel.value || "ALL",
-        prefixContains: filterPrefix.value.trim(),
-        routeContains: filterRoute.value.trim(),
+        routeExact: filterRouteExact.value || "",
         rangeFrom: rangeFrom.value.trim(),
         rangeTo: rangeTo.value.trim(),
         limit: parseInt(pageSize.value, 10) || 500
       };
     }
 
+    function requireRange(p){
+      if (!p.rangeFrom || !p.rangeTo) {
+        alert("Enter both From prefix and To prefix. (Use the same value in both to search a single prefix.)");
+        return false;
+      }
+      if (!/^[A-Za-z]+(\d+)?$/.test(p.rangeFrom) || !/^[A-Za-z]+(\d+)?$/.test(p.rangeTo)) {
+        alert("Prefix range must be letters with optional numbers (e.g. AB, AB10, M, M34).");
+        return false;
+      }
+      return true;
+    }
+
     async function runSearch(newOffset=0){
       const p = currentSearchParams();
+      if (!requireRange(p)) return;
+
       offset = Math.max(0, newOffset);
-
-      // Require at least one filter (prevents accidental full-table pulls)
-      const hasAny =
-        (p.channel && p.channel !== "ALL") ||
-        !!p.prefixContains ||
-        !!p.routeContains ||
-        (!!p.rangeFrom && !!p.rangeTo);
-
-      if (!hasAny) {
-        alert("Enter at least one filter (Channel / Prefix / Route / Range) before searching.");
-        return;
-      }
-
-      setStatus("Searching...");
-      dirty.clear();
-      markDirty();
+      setStatus("Searching…");
       masterCheck.checked = false;
 
       const qs = new URLSearchParams({
         action: "search",
         channel: p.channel,
-        prefixContains: p.prefixContains,
-        routeContains: p.routeContains,
+        routeExact: p.routeExact,
         rangeFrom: p.rangeFrom,
         rangeTo: p.rangeTo,
         offset: String(offset),
@@ -346,11 +431,11 @@
       offsetTxt.textContent = offset.toLocaleString();
 
       const limit = parseInt(pageSize.value, 10) || 500;
-
       prevBtn.disabled = (offset <= 0);
       nextBtn.disabled = (offset + limit >= total);
     }
 
+    /************* TABLE *************/
     function renderTable(){
       tbody.innerHTML = "";
       if (!rows.length) {
@@ -389,6 +474,7 @@
     function routeCell(i, r){
       const td = document.createElement("td");
       td.className = "col-route";
+
       const sel = document.createElement("select");
       sel.style.width = "100%";
       sel.appendChild(new Option("(select route)", ""));
@@ -397,11 +483,9 @@
 
       sel.addEventListener("change", () => {
         r.route = sel.value;
-        // update displayed days immediately from meta if possible
         if (r.route && routeMeta[r.route] && routeMeta[r.route].days) r.days = routeMeta[r.route].days;
-        dirty.set(`${r.prefix}||${r.channel}`, pickUpdatable(r));
-        markDirty();
-        renderTable(); // refresh days column
+        stageRow(r);
+        renderTable(); // refresh days
       });
 
       td.appendChild(sel);
@@ -411,15 +495,17 @@
     function serviceCell(i, r){
       const td = document.createElement("td");
       td.className = "col-service";
+
       const sel = document.createElement("select");
       sel.style.width = "100%";
       ["","One-person","Two-person"].forEach(v => sel.appendChild(new Option(v || "(blank)", v)));
       sel.value = r.serviceType || "";
+
       sel.addEventListener("change", () => {
         r.serviceType = sel.value;
-        dirty.set(`${r.prefix}||${r.channel}`, pickUpdatable(r));
-        markDirty();
+        stageRow(r);
       });
+
       td.appendChild(sel);
       return td;
     }
@@ -427,95 +513,83 @@
     function leadCell(i, r){
       const td = document.createElement("td");
       td.className = "col-lead";
+
       const inp = document.createElement("input");
       inp.type = "text";
       inp.value = r.leadTime || "";
       inp.style.width = "100%";
+
       inp.addEventListener("blur", () => {
         r.leadTime = inp.value.trim();
-        dirty.set(`${r.prefix}||${r.channel}`, pickUpdatable(r));
-        markDirty();
+        stageRow(r);
       });
+
       td.appendChild(inp);
       return td;
     }
 
-    function pickUpdatable(r){
-      return { prefix: r.prefix, channel: r.channel, route: r.route, serviceType: r.serviceType, leadTime: r.leadTime };
+    function stageRow(r){
+      dirty.set(`${r.prefix}||${r.channel}`, { prefix:r.prefix, channel:r.channel, route:r.route, serviceType:r.serviceType, leadTime:r.leadTime });
+      saveEditsBtn.disabled = (dirty.size === 0);
     }
 
-    async function saveSelectedEdits(){
+    /************* APPLY TO SELECTED *************/
+    function getSelectedRowsOnPage(){
+      const checked = Array.from(document.querySelectorAll(".rowCheck:checked"))
+        .map(cb => rows[Number(cb.dataset.i)])
+        .filter(Boolean);
+      return checked;
+    }
+
+    function applyToSelected(){
+      const selected = getSelectedRowsOnPage();
+      if (!selected.length) { alert("Tick at least one row."); return; }
+
+      const routeVal = bulkRoute.value;
+      const serviceVal = bulkServiceType.value;
+      const leadVal = bulkLeadTime.value.trim();
+
+      if (!routeVal && !serviceVal && !leadVal) {
+        alert("Enter at least one change (Route / Delivery Type / Lead Time).");
+        return;
+      }
+
+      selected.forEach(r => {
+        if (routeVal) {
+          r.route = routeVal;
+          if (routeMeta[routeVal] && routeMeta[routeVal].days) r.days = routeMeta[routeVal].days;
+        }
+        if (serviceVal) r.serviceType = serviceVal;
+        if (leadVal) r.leadTime = leadVal;
+        stageRow(r);
+      });
+
+      renderTable();
+      setStatus(`Staged changes for ${selected.length.toLocaleString()} selected rows. Click "Save edits" to commit.`);
+    }
+
+    /************* SAVE EDITS *************/
+    async function saveEdits(){
       if (!dirty.size) return;
-      setStatus("Saving selected edits...");
-      saveSelectedBtn.disabled = true;
+
+      setStatus("Saving edits to Google Sheet…");
+      saveEditsBtn.disabled = true;
 
       const payload = encodeURIComponent(JSON.stringify({ rowUpdates: Array.from(dirty.values()) }));
       const res = await jsonp(`${API_BASE}?action=save&payload=${payload}&cb=${Date.now()}`);
 
       if (!res || !res.ok) {
         setStatus(res && res.error ? res.error : "Save failed", true);
-        saveSelectedBtn.disabled = false;
+        saveEditsBtn.disabled = false;
         return;
       }
 
       dirty.clear();
-      markDirty();
       setStatus(`Saved. Updated rows: ${res.updatedRows || 0}. Corrected day cells: ${res.correctedDays || 0}.`);
-
-      // refresh current page
       await runSearch(offset);
     }
 
-    async function runBulk(){
-      const mode = bulkMode.value;
-      const updates = {};
-      if (bulkRoute.value) updates.route = bulkRoute.value;
-      if (bulkServiceType.value) updates.serviceType = bulkServiceType.value;
-      if (bulkLeadTime.value.trim()) updates.leadTime = bulkLeadTime.value.trim();
-
-      if (!("route" in updates) && !("serviceType" in updates) && !("leadTime" in updates)) {
-        alert("Enter at least one bulk change field.");
-        return;
-      }
-
-      const p = currentSearchParams();
-
-      // Build payload by mode
-      const payload = { mode, channel: p.channel, prefixContains: p.prefixContains, routeContains: p.routeContains, updates };
-
-      if (mode === "range") {
-        if (!p.rangeFrom || !p.rangeTo) { alert("Enter From + To for range mode."); return; }
-        payload.rangeFrom = p.rangeFrom;
-        payload.rangeTo = p.rangeTo;
-      }
-
-      if (mode === "selected") {
-        const checked = Array.from(document.querySelectorAll(".rowCheck:checked"))
-          .map(cb => rows[Number(cb.dataset.i)])
-          .filter(Boolean)
-          .map(r => ({ prefix: r.prefix, channel: r.channel }));
-
-        if (!checked.length) { alert("Tick at least one row on this page."); return; }
-        payload.keys = checked;
-      }
-
-      if (!confirm("Run bulk update now? This will update the Sheet directly.")) return;
-
-      setStatus("Running bulk update...");
-      const encoded = encodeURIComponent(JSON.stringify(payload));
-      const res = await jsonp(`${API_BASE}?action=bulkUpdate&payload=${encoded}&cb=${Date.now()}`);
-
-      if (!res || !res.ok) {
-        setStatus(res && res.error ? res.error : "Bulk update failed", true);
-        return;
-      }
-
-      setStatus(`Bulk complete. Applied rows: ${res.appliedRows || 0}. Corrected day cells: ${res.correctedDays || 0}.`);
-      await runSearch(0);
-    }
-
-    // Events
-    document.getElementById("searchBtn").addEventListener("click", () => runSearch(0));
+    /************* PAGING *************/
     prevBtn.addEventListener("click", () => {
       const limit = parseInt(pageSize.value, 10) || 500;
       runSearch(Math.max(0, offset - limit));
@@ -525,22 +599,246 @@
       runSearch(offset + limit);
     });
 
-    document.getElementById("reloadMetaBtn").addEventListener("click", async () => {
-      try { await loadMeta(); }
-      catch (e) { console.error(e); setStatus(String(e.message||e), true); }
-    });
-
-    saveSelectedBtn.addEventListener("click", saveSelectedEdits);
-    document.getElementById("runBulkBtn").addEventListener("click", runBulk);
-
+    /************* SELECTION HELPERS *************/
     masterCheck.addEventListener("change", () => {
       document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = masterCheck.checked);
     });
+    document.getElementById("tickAllBtn").addEventListener("click", () => {
+      document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = true);
+      masterCheck.checked = true;
+    });
+    document.getElementById("untickAllBtn").addEventListener("click", () => {
+      document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = false);
+      masterCheck.checked = false;
+    });
 
-    // Init
+    /************* ROUTES MODAL *************/
+    const modalBackdrop = document.getElementById("modalBackdrop");
+    const routesManagerBtn = document.getElementById("routesManagerBtn");
+    const closeModalBtn = document.getElementById("closeModalBtn");
+    const routePick = document.getElementById("routePick");
+    const daysChecks = document.getElementById("daysChecks");
+    const scopeAllChk = document.getElementById("scopeAllChk");
+    const scopeChannels = document.getElementById("scopeChannels");
+    const newRouteName = document.getElementById("newRouteName");
+    const addRouteBtn = document.getElementById("addRouteBtn");
+    const deleteRouteBtn = document.getElementById("deleteRouteBtn");
+    const discardRouteBtn = document.getElementById("discardRouteBtn");
+    const saveRouteBtn = document.getElementById("saveRouteBtn");
+
+    let draftMeta = null;
+
+    function openModal(){
+      draftMeta = JSON.parse(JSON.stringify(routeMeta || {}));
+      rebuildRoutesModalPicklist();
+      modalBackdrop.style.display = "flex";
+      modalBackdrop.setAttribute("aria-hidden","false");
+      loadRouteIntoEditor(routePick.value);
+    }
+
+    function closeModal(){
+      modalBackdrop.style.display = "none";
+      modalBackdrop.setAttribute("aria-hidden","true");
+      draftMeta = null;
+    }
+
+    function rebuildRoutesModalPicklist(){
+      const routes = Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b));
+      routePick.innerHTML = "";
+      routes.forEach(r => routePick.appendChild(new Option(r, r)));
+      if (routes.length) routePick.value = routes[0];
+    }
+
+    function ensureDraft(){
+      if (!draftMeta) draftMeta = JSON.parse(JSON.stringify(routeMeta || {}));
+    }
+
+    function loadRouteIntoEditor(routeName){
+      ensureDraft();
+      if (!routeName || !draftMeta[routeName]) return;
+
+      // Days checkboxes
+      daysChecks.innerHTML = "";
+      const currentDays = new Set(String(draftMeta[routeName].days || "Monday").split("|").map(s=>s.trim()).filter(Boolean));
+
+      ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].forEach(day => {
+        const id = `d_${routeName}_${day}`.replace(/\W+/g,"_");
+        const lab = document.createElement("label");
+        lab.innerHTML = `<input type="checkbox" id="${id}"> ${day}`;
+        const chk = lab.querySelector("input");
+        chk.checked = currentDays.has(day);
+        chk.addEventListener("change", () => {
+          const picked = [];
+          ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].forEach(d => {
+            const did = `d_${routeName}_${d}`.replace(/\W+/g,"_");
+            const c = document.getElementById(did);
+            if (c && c.checked) picked.push(d);
+          });
+          if (!picked.length) {
+            // force at least one
+            const mid = `d_${routeName}_Monday`.replace(/\W+/g,"_");
+            const m = document.getElementById(mid);
+            if (m) m.checked = true;
+            picked.push("Monday");
+          }
+          draftMeta[routeName].days = picked.join("|");
+        });
+        daysChecks.appendChild(lab);
+      });
+
+      // Scope
+      scopeChannels.innerHTML = "";
+      const scope = draftMeta[routeName].channels ?? "ALL";
+      const isAll = (scope === "ALL");
+
+      scopeAllChk.checked = isAll;
+
+      channels.forEach(ch => {
+        const id = `c_${routeName}_${ch}`.replace(/\W+/g,"_");
+        const lab = document.createElement("label");
+        lab.innerHTML = `<input type="checkbox" id="${id}"> ${ch}`;
+        const chk = lab.querySelector("input");
+        chk.disabled = isAll;
+
+        if (!isAll && Array.isArray(scope)) chk.checked = scope.includes(ch);
+        else chk.checked = false;
+
+        chk.addEventListener("change", () => {
+          if (scopeAllChk.checked) return;
+          const picked = channels.filter(cc => {
+            const cid = `c_${routeName}_${cc}`.replace(/\W+/g,"_");
+            const c = document.getElementById(cid);
+            return c && c.checked;
+          });
+          draftMeta[routeName].channels = picked.length ? picked : "ALL";
+          if (draftMeta[routeName].channels === "ALL") {
+            scopeAllChk.checked = true;
+            loadRouteIntoEditor(routeName);
+          }
+        });
+
+        scopeChannels.appendChild(lab);
+      });
+
+      scopeAllChk.onchange = () => {
+        if (scopeAllChk.checked) {
+          draftMeta[routeName].channels = "ALL";
+        } else {
+          // default to first channel if any
+          draftMeta[routeName].channels = channels.length ? [channels[0]] : "ALL";
+        }
+        loadRouteIntoEditor(routeName);
+      };
+    }
+
+    routePick.addEventListener("change", () => loadRouteIntoEditor(routePick.value));
+
+    addRouteBtn.addEventListener("click", () => {
+      ensureDraft();
+      const name = (newRouteName.value || "").trim();
+      if (!name) { alert("Enter a route name."); return; }
+      if (draftMeta[name] || routeMeta[name]) { alert("That route already exists."); return; }
+      draftMeta[name] = { days: "Monday", channels: "ALL" };
+
+      // Apply into live list immediately for selection (still not saved until Save)
+      routeMeta[name] = { days: "Monday", channels: "ALL" };
+      rebuildRouteDropdowns();
+      rebuildRoutesModalPicklist();
+      routePick.value = name;
+      loadRouteIntoEditor(name);
+      newRouteName.value = "";
+      setStatus(`Route "${name}" added (staged). Click Save route changes to commit.`);
+    });
+
+    deleteRouteBtn.addEventListener("click", async () => {
+      ensureDraft();
+      const name = routePick.value;
+      if (!name) return;
+      if (!confirm(`Delete route "${name}"? (Will fail if still used.)`)) return;
+
+      setStatus("Deleting route…");
+      const payload = encodeURIComponent(JSON.stringify({ routeUpdates: [{ op:"delete", route: name }] }));
+      const res = await jsonp(`${API_BASE}?action=saveRouteMeta&payload=${payload}&cb=${Date.now()}`);
+      if (!res || !res.ok) {
+        setStatus(res && res.error ? res.error : "Delete failed", true);
+        return;
+      }
+
+      // refresh meta from response if provided
+      if (res.meta) routeMeta = res.meta;
+      rebuildRouteDropdowns();
+      rebuildRoutesModalPicklist();
+      setStatus(`Route "${name}" deleted. Corrected day cells: ${res.correctedDays || 0}.`);
+      loadRouteIntoEditor(routePick.value);
+      await safeRefreshAfterRouteChange();
+    });
+
+    discardRouteBtn.addEventListener("click", async () => {
+      if (!confirm("Discard unsaved route edits?")) return;
+      await loadMeta();
+      if (modalBackdrop.style.display === "flex") {
+        rebuildRoutesModalPicklist();
+        loadRouteIntoEditor(routePick.value);
+      }
+      setStatus("Discarded route edits (reloaded meta).");
+    });
+
+    saveRouteBtn.addEventListener("click", async () => {
+      ensureDraft();
+      const name = routePick.value;
+      if (!name || !draftMeta[name]) { alert("Select a route."); return; }
+
+      const u = draftMeta[name];
+      const payloadObj = {
+        routeUpdates: [{
+          op: "upsert",
+          route: name,
+          days: u.days,
+          channels: u.channels
+        }]
+      };
+
+      setStatus("Saving route changes…");
+      const payload = encodeURIComponent(JSON.stringify(payloadObj));
+      const res = await jsonp(`${API_BASE}?action=saveRouteMeta&payload=${payload}&cb=${Date.now()}`);
+
+      if (!res || !res.ok) {
+        setStatus(res && res.error ? res.error : "Save route failed", true);
+        return;
+      }
+
+      if (res.meta) routeMeta = res.meta;
+      rebuildRouteDropdowns();
+      setStatus(`Route saved. Corrected day cells: ${res.correctedDays || 0}.`);
+      closeModal();
+      await safeRefreshAfterRouteChange();
+    });
+
+    async function safeRefreshAfterRouteChange(){
+      // refresh current page results if user has searched already
+      try {
+        if (pager.style.display === "flex") await runSearch(offset);
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    routesManagerBtn.addEventListener("click", openModal);
+    closeModalBtn.addEventListener("click", closeModal);
+
+    /************* TOP BUTTONS *************/
+    document.getElementById("searchBtn").addEventListener("click", () => runSearch(0));
+    document.getElementById("reloadMetaBtn").addEventListener("click", async () => {
+      try { await loadMeta(); setStatus("Meta reloaded."); }
+      catch (e) { console.error(e); setStatus(String(e.message||e), true); }
+    });
+    document.getElementById("applyToSelectedBtn").addEventListener("click", applyToSelected);
+    saveEditsBtn.addEventListener("click", saveEdits);
+
+    /************* INIT *************/
     (async function init(){
       try { await loadMeta(); }
-      catch (e) { console.error(e); setStatus("Failed to load meta. Check API_BASE and deployment.", true); }
+      catch (e) { console.error(e); setStatus("Failed to load meta. Check Apps Script deployment.", true); }
     })();
   </script>
 </body>
