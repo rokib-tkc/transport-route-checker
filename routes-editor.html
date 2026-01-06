@@ -3,102 +3,153 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Routes Editor</title>
+  <title>Routes Editor (Google Sheet)</title>
   <style>
-    * { box-sizing: border-box; font-family: Arial, sans-serif; }
-    body { margin: 0; padding: 18px; background:#f5f5f5; color:#222; }
-    .wrap { max-width: 1200px; margin:0 auto; background:#fff; padding:16px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.08); }
-    h1 { margin: 0 0 12px; font-size: 22px; }
+    * { box-sizing:border-box; font-family: Arial, sans-serif; }
+    body { margin:0; padding:18px; background:#f5f5f5; color:#222; }
+    .wrap { max-width: 1300px; margin:0 auto; background:#fff; padding:16px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    h1 { margin:0 0 12px; font-size:22px; display:flex; align-items:center; gap:10px; }
+    .pill { display:inline-block; font-size:11px; padding:3px 8px; border-radius:999px; background:#f0f0f0; border:1px solid #e0e0e0; }
     .row { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin: 10px 0; }
     .group { background:#fafafa; border:1px solid #e6e6e6; border-radius:10px; padding:12px; }
-    label { font-size: 12px; font-weight: bold; display:block; margin-bottom: 4px; }
+    label { font-size:12px; font-weight:bold; display:block; margin-bottom:4px; }
     input[type="text"], select {
-      padding: 8px 10px; border:1px solid #ccc; border-radius:6px; font-size: 13px; width: 220px;
+      padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; width: 220px;
     }
-    .small { width: 150px !important; }
-    .wide { width: 320px !important; }
+    .small { width:150px !important; }
+    .wide { width:320px !important; }
     button {
-      padding: 9px 12px; border:0; border-radius:6px; background:#0078d4; color:#fff; cursor:pointer; font-size: 13px;
+      padding:9px 12px; border:0; border-radius:6px; background:#0078d4; color:#fff; cursor:pointer; font-size:13px;
     }
     button:hover { background:#005ea3; }
     button:disabled { background:#9bbbd7; cursor:not-allowed; }
-    .muted { font-size: 12px; color:#666; }
-    .status { font-size: 12px; padding:8px 10px; border-radius:6px; background:#f0f7ff; border:1px solid #d6eaff; }
+    .mini-btn { background:#444 !important; padding:7px 10px !important; }
+    .mini-btn:hover { background:#333 !important; }
+    .danger { background:#b00020 !important; }
+    .danger:hover { background:#8b001a !important; }
+    .muted { font-size:12px; color:#666; }
+    .status { font-size:12px; padding:8px 10px; border-radius:6px; background:#f0f7ff; border:1px solid #d6eaff; }
     .status.bad { background:#ffecec; border-color:#ffd0d0; color:#900; }
 
-    table { width:100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; background:#fff; }
-    th, td { border:1px solid #e2e2e2; padding: 7px 8px; font-size: 13px; text-align:left; vertical-align: top; }
-    th { background:#f2f2f2; position: sticky; top: 0; z-index: 1; }
-    .col-check { width: 44px; text-align:center; }
-    .col-prefix { width: 110px; }
-    .col-route { width: 260px; }
-    .col-channel { width: 180px; }
-    .col-service { width: 140px; }
-    .col-lead { width: 120px; }
-    .col-days { width: 260px; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; table-layout: fixed; background:#fff; }
+    th, td { border:1px solid #e2e2e2; padding:7px 8px; font-size:13px; text-align:left; vertical-align:top; }
+    th { background:#f2f2f2; position:sticky; top:0; z-index:1; }
+    .col-check { width:44px; text-align:center; }
+    .col-prefix { width:100px; }
+    .col-channel { width:190px; }
+    .col-route { width:280px; }
+    .col-service { width:140px; }
+    .col-lead { width:120px; }
+    .col-days { width:220px; }
 
-    .cell-edit { border-radius: 4px; outline: none; min-height: 18px; }
-    .cell-edit:focus { box-shadow: inset 0 0 0 2px rgba(0,120,212,.25); background:#fbfdff; }
-    .invalid { background:#fff2f2 !important; box-shadow: inset 0 0 0 2px rgba(200,0,0,.2) !important; }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 11px; background:#f2f2f2; border:1px solid #ddd; border-bottom-width:2px; padding:1px 5px; border-radius:5px; }
 
-    .pill {
-      display:inline-block; font-size: 11px; padding: 3px 8px; border-radius:999px;
-      background:#f0f0f0; border:1px solid #e0e0e0; margin-left: 8px;
-    }
     .toolbar-right { margin-left:auto; display:flex; gap:10px; align-items:center; }
-    .hint { font-size: 12px; color:#555; }
-    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 11px; background:#f2f2f2; border:1px solid #ddd; border-bottom-width:2px; padding: 1px 5px; border-radius: 5px; }
+
+    .radio-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .radio-row label { font-weight:normal; font-size:12px; margin:0; display:flex; align-items:center; gap:6px; }
+    .radio-row input { margin:0; }
 
     .preview {
-      margin-left: auto;
+      margin-left:auto;
       display:flex;
       align-items:center;
       gap:10px;
-      padding: 8px 10px;
-      border: 1px solid #e6e6e6;
-      border-radius: 10px;
-      background: #fff;
-      min-height: 40px;
+      padding:8px 10px;
+      border:1px solid #e6e6e6;
+      border-radius:10px;
+      background:#fff;
+      min-height:40px;
     }
-    .preview strong { font-size: 12px; }
-    .preview .count { font-size: 16px; font-weight: 700; }
-    .preview .smalltxt { font-size: 12px; color:#666; }
+    .preview strong { font-size:12px; }
+    .preview .count { font-size:16px; font-weight:700; }
+    .preview .smalltxt { font-size:12px; color:#666; }
     .preview.bad { border-color:#ffd0d0; background:#fff6f6; }
-    .mini-btn { background:#444 !important; padding: 7px 10px !important; }
-    .mini-btn:hover { background:#333 !important; }
+
+    /* Modal */
+    .modal-backdrop {
+      position:fixed; inset:0;
+      background: rgba(0,0,0,.35);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding: 18px;
+      z-index: 999;
+    }
+    .modal {
+      width: min(920px, 100%);
+      background:#fff;
+      border-radius: 12px;
+      box-shadow: 0 12px 40px rgba(0,0,0,.25);
+      overflow:hidden;
+      border:1px solid #e6e6e6;
+    }
+    .modal header {
+      padding: 12px 14px;
+      background:#f7f7f7;
+      border-bottom:1px solid #e6e6e6;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .modal header h2 { margin:0; font-size:16px; }
+    .modal .content { padding: 14px; }
+    .modal .footer { padding: 12px 14px; border-top:1px solid #e6e6e6; display:flex; gap:10px; justify-content:flex-end; }
+    .route-list { max-height: 360px; overflow:auto; border:1px solid #e6e6e6; border-radius:10px; background:#fff; }
+    .route-item { padding:10px; border-bottom:1px solid #eee; display:grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap:10px; align-items:start; }
+    .route-item:last-child { border-bottom:0; }
+    .route-name { font-weight:bold; font-size:13px; }
+    .chkgrid { display:flex; flex-wrap:wrap; gap:8px; }
+    .chkgrid label { font-weight:normal; font-size:12px; margin:0; display:flex; align-items:center; gap:6px; }
+    .route-meta { font-size:12px; color:#666; }
+    .route-actions { display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+    .route-actions button { padding:7px 10px; font-size:12px; }
+    .input-full { width:100% !important; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Routes Editor <span class="pill">routes.csv</span></h1>
+    <h1>
+      Routes Editor
+      <span class="pill">Google Sheet (locked rules)</span>
+    </h1>
 
     <div class="row">
       <div class="status" id="statusBox">Ready.</div>
       <div class="toolbar-right">
-        <button id="reloadBtn">Reload routes.csv</button>
-        <button id="downloadBtn" disabled>Download updated routes.csv</button>
+        <button id="manageRoutesBtn" class="mini-btn">Manage routes (days + scope)</button>
+        <button id="reloadBtn">Reload</button>
+        <button id="saveBtn" disabled>Save to Google Sheet</button>
       </div>
     </div>
 
     <div class="group">
-      <div class="row">
-        <div>
-          <label>Quick filter: prefix contains</label>
-          <input id="filterPrefix" type="text" placeholder="e.g. CO" class="small"/>
+      <div class="row" style="align-items:flex-start;">
+        <div style="min-width:260px;">
+          <div class="muted"><strong>Filtering</strong></div>
+          <div class="muted">Prefix + channel are locked. Days are route-defined.</div>
+          <div class="muted" style="margin-top:6px;">
+            Tip: bulk update works on <span class="kbd">ticked</span>, <span class="kbd">filtered</span>, or <span class="kbd">prefix range</span>.
+          </div>
         </div>
+
         <div>
-          <label>Quick filter: channel contains</label>
-          <input id="filterChannel" type="text" placeholder="e.g. Component" class="wide"/>
+          <label>Filter: prefix contains</label>
+          <input id="filterPrefix" type="text" placeholder="e.g. AB1" class="small"/>
         </div>
+
         <div>
-          <label>Quick filter: route contains</label>
-          <input id="filterRoute" type="text" placeholder="e.g. TKC19" class="wide"/>
+          <label>Filter: route contains</label>
+          <input id="filterRoute" type="text" placeholder="e.g. TKC01" class="wide"/>
         </div>
+
+        <div style="min-width:420px;">
+          <label>Filter: channel</label>
+          <div class="radio-row" id="channelRadios"></div>
+        </div>
+
         <div>
           <button id="applyFiltersBtn">Apply filters</button>
-        </div>
-        <div class="muted">
-          Tip: inline edit like Excel. Click a cell → type → <span class="kbd">Enter</span> commit, <span class="kbd">Esc</span> revert.
         </div>
       </div>
     </div>
@@ -106,27 +157,27 @@
     <div class="group" style="margin-top:12px;">
       <div class="row" style="align-items:flex-start;">
         <div style="min-width:280px;">
-          <div class="hint"><strong>Bulk target</strong></div>
-          <div class="muted">Choose what rows your bulk update applies to.</div>
+          <div class="muted"><strong>Bulk target</strong></div>
+          <div class="muted">Choose which rows to update.</div>
         </div>
 
         <div>
           <label>Mode</label>
           <select id="bulkTargetMode">
             <option value="selected">Apply to ticked rows</option>
-            <option value="range">Apply to prefix range</option>
             <option value="filtered">Apply to filtered results</option>
+            <option value="range">Apply to prefix range</option>
           </select>
         </div>
 
         <div>
           <label>From prefix</label>
-          <input id="rangeFrom" type="text" placeholder="e.g. CO1 or CO" class="small"/>
+          <input id="rangeFrom" type="text" placeholder="e.g. AB10 or AB" class="small"/>
         </div>
 
         <div>
           <label>To prefix</label>
-          <input id="rangeTo" type="text" placeholder="e.g. CO15 or CV" class="small"/>
+          <input id="rangeTo" type="text" placeholder="e.g. AB14 or AC" class="small"/>
         </div>
 
         <div class="preview" id="previewBox">
@@ -142,31 +193,20 @@
         </div>
       </div>
 
-      <div class="muted" style="margin-top:8px;">
-        Prefix range supports:
-        <span class="kbd">CO1 → CO15</span>,
-        <span class="kbd">CO → CO</span> (all CO*),
-        <span class="kbd">CO → CV</span> (letter range),
-        <span class="kbd">M → M34</span>,
-        <span class="kbd">CO10 → CO</span> (CO10+).
-      </div>
-
       <hr style="border:0; border-top:1px solid #e8e8e8; margin:10px 0;"/>
 
       <div class="row">
         <div style="min-width:200px;">
-          <div class="hint"><strong>Bulk update fields</strong></div>
+          <div class="muted"><strong>Bulk update fields</strong></div>
           <div class="muted">Leave blank = no change</div>
         </div>
 
         <div>
-          <label>Route</label>
-          <input id="bulkRoute" type="text" placeholder="e.g. TKC19 Colchester O/N" class="wide"/>
-        </div>
-
-        <div>
-          <label>Channel</label>
-          <input id="bulkChannel" type="text" placeholder="e.g. Component Channel" class="wide"/>
+          <label>Assign Route</label>
+          <select id="bulkRoute" class="wide">
+            <option value="">(no change)</option>
+          </select>
+          <div class="muted" style="margin-top:4px;">Routes are filtered by channel scope.</div>
         </div>
 
         <div>
@@ -184,22 +224,19 @@
         </div>
 
         <div>
-          <label>Delivery Days (pipe separated)</label>
-          <input id="bulkDays" type="text" placeholder="e.g. Monday|Wednesday|Friday" class="wide"/>
+          <button id="applyBulkBtn">Apply bulk update</button>
         </div>
 
-        <div>
-          <button id="applyBulkBtn">Apply bulk update</button>
+        <div class="muted" style="flex-basis:100%;">
+          Note: <strong>Delivery Days cannot be bulk edited here</strong>. Change them via <span class="kbd">Manage routes</span>.
         </div>
       </div>
 
       <div class="row">
         <div class="muted">
-          <strong>Bulk actions:</strong>
-          <button id="tickAllVisibleBtn" style="background:#444;">Tick all visible</button>
-          <button id="untickAllVisibleBtn" style="background:#666;">Untick all visible</button>
-          <button id="deleteSelectedBtn" style="background:#b00020;">Delete ticked rows</button>
-          <button id="addRowBtn" style="background:#1a7f37;">Add new row</button>
+          <strong>Selection:</strong>
+          <button id="tickAllVisibleBtn" class="mini-btn">Tick all visible</button>
+          <button id="untickAllVisibleBtn" class="mini-btn" style="background:#666 !important;">Untick all visible</button>
         </div>
       </div>
     </div>
@@ -210,11 +247,11 @@
           <tr>
             <th class="col-check"><input id="masterCheck" type="checkbox" title="Tick/untick visible rows"/></th>
             <th class="col-prefix">Prefix</th>
-            <th class="col-route">Route</th>
             <th class="col-channel">Channel</th>
+            <th class="col-route">Route</th>
             <th class="col-service">Delivery Type</th>
             <th class="col-lead">Lead Time</th>
-            <th class="col-days">Delivery Days (pipe)</th>
+            <th class="col-days">Days (route-defined)</th>
           </tr>
         </thead>
         <tbody id="tbody"></tbody>
@@ -222,102 +259,341 @@
     </div>
 
     <div class="muted" style="margin-top:10px;">
-      <strong>Notes:</strong> Editor outputs:
-      <span class="kbd">prefix,route,channel,serviceType,leadTime,days</span>
-      and <span class="kbd">days</span> is pipe-separated (e.g. Monday|Wednesday|Friday).
+      <strong>Locked rules:</strong> No adding/deleting rows. Prefix + Channel are keys. Days come from the route definition.
+    </div>
+  </div>
+
+  <!-- Manage Routes Modal -->
+  <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <header>
+        <h2>Manage routes</h2>
+        <span class="pill">days + channel scope</span>
+        <div class="toolbar-right" style="margin-left:auto;">
+          <button id="closeModalBtn" class="mini-btn">Close</button>
+        </div>
+      </header>
+      <div class="content">
+        <div class="row">
+          <div style="flex:1; min-width:280px;">
+            <label>Add new route</label>
+            <input id="newRouteName" type="text" placeholder="e.g. TKC01 Aberdeen O/N" class="input-full"/>
+            <div class="muted" style="margin-top:4px;">After adding, set its days + scope. It will become selectable in the table.</div>
+          </div>
+          <div>
+            <button id="addRouteBtn">Add route</button>
+          </div>
+        </div>
+
+        <div class="muted" style="margin:10px 0;">
+          Changing a route’s days will update <strong>every row</strong> that uses that route in the Sheet.
+        </div>
+
+        <div class="route-list" id="routeList"></div>
+      </div>
+      <div class="footer">
+        <button id="discardRouteChangesBtn" class="mini-btn" style="background:#666 !important;">Discard changes</button>
+        <button id="applyRouteChangesBtn">Apply route changes</button>
+      </div>
     </div>
   </div>
 
   <script>
-    // ============================================================
-    // BASIC CSV/TSV PARSING (auto-detect delimiter)
-    // ============================================================
+    /**************************************************************
+     * CONFIG
+     **************************************************************/
+    const API_BASE = "https://script.google.com/macros/s/AKfycby2UaJDmzrkxCm27BA4rH3Fo5xHaHk9lWENv7NvxJWHa0L-P2T_SVJPkMagdNX3QDNvLw/exec"; 
 
-    function stripBom(s) {
-      return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+    /**************************************************************
+     * JSONP helper
+     **************************************************************/
+    function jsonp(url) {
+      return new Promise((resolve, reject) => {
+        const cbName = "cb_" + Math.random().toString(36).slice(2);
+        const script = document.createElement("script");
+        const sep = url.includes("?") ? "&" : "?";
+        const full = url + sep + "callback=" + encodeURIComponent(cbName);
+
+        window[cbName] = (data) => {
+          cleanup();
+          resolve(data);
+        };
+
+        script.onerror = () => {
+          cleanup();
+          reject(new Error("Network error (JSONP)"));
+        };
+
+        function cleanup() {
+          delete window[cbName];
+          script.remove();
+        }
+
+        script.src = full;
+        document.body.appendChild(script);
+      });
     }
 
-    function detectDelimiter(headerLine) {
-      if (headerLine.includes("\t")) return "\t";
-      return ",";
+    /**************************************************************
+     * State
+     **************************************************************/
+    let allRows = [];               // [{prefix, channel, route, serviceType, leadTime, days}]
+    let view = [];                  // [{row, idx}]
+    let channels = [];
+    let selectedChannel = "ALL";
+    let routeMeta = {};             // { routeName: {days, channels:'ALL'|[...]} }
+    let version = "";
+    let dirtyRows = new Map();      // key prefix||channel -> updated row object
+    let dirtyRouteUpdates = new Map(); // route -> {op, route, days, channels}
+
+    const statusBox = document.getElementById("statusBox");
+    const saveBtn = document.getElementById("saveBtn");
+    const reloadBtn = document.getElementById("reloadBtn");
+
+    function setStatus(msg, bad=false) {
+      statusBox.textContent = msg;
+      statusBox.classList.toggle("bad", !!bad);
     }
 
-    function splitLine(line, delim) {
-      // Simple split – avoid commas/tabs inside values.
-      return line.split(delim).map(x => x.trim());
+    function markDirty() {
+      saveBtn.disabled = (dirtyRows.size === 0 && dirtyRouteUpdates.size === 0);
     }
 
-    function parseDelimited(text) {
-      const cleanedText = stripBom(String(text || ""));
-      const lines = cleanedText.split(/\r?\n/).filter(l => l.trim() !== "");
-      if (!lines.length) return { delim: ",", headers: [], rows: [] };
+    /**************************************************************
+     * Load
+     **************************************************************/
+    async function loadFromSheet() {
+      setStatus("Loading from Google Sheet…");
+      saveBtn.disabled = true;
+      dirtyRows.clear();
+      dirtyRouteUpdates.clear();
 
-      const delim = detectDelimiter(lines[0]);
-      const headers = splitLine(lines[0], delim);
+      const res = await jsonp(`${API_BASE}?action=read&cb=${Date.now()}`);
+      if (!res || !res.ok) throw new Error(res && res.error ? res.error : "Failed to load");
 
-      const rows = [];
-      for (const line of lines.slice(1)) {
-        const cols = splitLine(line, delim);
-        const obj = {};
-        headers.forEach((h, i) => obj[h] = (cols[i] || ""));
-        rows.push(obj);
+      version = res.version;
+      channels = res.channels || [];
+      routeMeta = res.routeMeta || {};
+      allRows = res.rows || [];
+
+      buildChannelRadios();
+      rebuildRouteDropdowns();
+      render();
+      updatePreview();
+      setStatus(`Loaded ${allRows.length.toLocaleString()} rows from Sheet.`);
+    }
+
+    /**************************************************************
+     * Filters
+     **************************************************************/
+    const filterPrefix = document.getElementById("filterPrefix");
+    const filterRoute = document.getElementById("filterRoute");
+    const applyFiltersBtn = document.getElementById("applyFiltersBtn");
+
+    function passesFilters(r) {
+      const fp = filterPrefix.value.trim().toUpperCase();
+      const fr = filterRoute.value.trim().toLowerCase();
+
+      if (selectedChannel !== "ALL" && r.channel !== selectedChannel) return false;
+      if (fp && !r.prefix.includes(fp)) return false;
+      if (fr && !String(r.route||"").toLowerCase().includes(fr)) return false;
+      return true;
+    }
+
+    function sortByPrefixThenChannel(a,b) {
+      if (a.prefix !== b.prefix) return a.prefix.localeCompare(b.prefix);
+      return a.channel.localeCompare(b.channel);
+    }
+
+    /**************************************************************
+     * Table rendering
+     **************************************************************/
+    const tbody = document.getElementById("tbody");
+    const masterCheck = document.getElementById("masterCheck");
+
+    function render() {
+      view = allRows
+        .map((row, idx) => ({ row, idx }))
+        .filter(x => passesFilters(x.row))
+        .sort((x,y) => sortByPrefixThenChannel(x.row, y.row));
+
+      tbody.innerHTML = "";
+
+      for (const item of view) {
+        const r = item.row;
+        const tr = document.createElement("tr");
+
+        // checkbox
+        const tdC = document.createElement("td");
+        tdC.className = "col-check";
+        tdC.innerHTML = `<input type="checkbox" class="rowCheck" data-idx="${item.idx}">`;
+        tr.appendChild(tdC);
+
+        // prefix (locked)
+        tr.appendChild(makeTextCell(r.prefix, "col-prefix"));
+
+        // channel (locked)
+        tr.appendChild(makeTextCell(r.channel, "col-channel"));
+
+        // route (controlled select)
+        tr.appendChild(makeRouteSelectCell(item.idx, r));
+
+        // serviceType select
+        tr.appendChild(makeServiceTypeCell(item.idx, r));
+
+        // lead time input
+        tr.appendChild(makeLeadTimeCell(item.idx, r));
+
+        // days (read-only, derived)
+        tr.appendChild(makeTextCell(r.days, "col-days"));
+
+        tbody.appendChild(tr);
       }
-      return { delim, headers, rows };
+
+      masterCheck.checked = false;
+      setStatus(`Showing ${view.length.toLocaleString()} of ${allRows.length.toLocaleString()} rows.`);
     }
 
-    function toCsvSafe(value) {
-      return String(value ?? "").replace(/\r?\n/g, " ").trim();
+    function makeTextCell(text, className) {
+      const td = document.createElement("td");
+      td.className = className;
+      td.textContent = (text ?? "");
+      return td;
     }
 
-    // ============================================================
-    // DATA MODEL
-    // ============================================================
+    function routeAllowedForChannel(routeName, channel) {
+      const meta = routeMeta[routeName];
+      if (!meta) return true; // if unknown, allow (API will bootstrap)
+      if (meta.channels === "ALL") return true;
+      const arr = Array.isArray(meta.channels) ? meta.channels : [];
+      return arr.includes(channel);
+    }
 
-    let routes = [];   // full dataset
-    let view = [];     // filtered + sorted view (array of {row, idx})
-    let dirty = false;
+    function getRouteOptionsForChannel(channel) {
+      const routes = Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b));
+      return routes.filter(r => routeAllowedForChannel(r, channel));
+    }
 
-    const headersOut = ["prefix","route","channel","serviceType","leadTime","days"];
+    function makeRouteSelectCell(idx, row) {
+      const td = document.createElement("td");
+      td.className = "col-route";
+
+      const sel = document.createElement("select");
+      sel.style.width = "100%";
+
+      const opts = getRouteOptionsForChannel(row.channel);
+      // Ensure current route is shown even if scope changed (so you can see it)
+      const routesFinal = Array.from(new Set([row.route, ...opts].filter(Boolean)));
+
+      sel.appendChild(new Option("(select route)", ""));
+      routesFinal.forEach(rn => sel.appendChild(new Option(rn, rn)));
+      sel.value = row.route || "";
+
+      sel.addEventListener("change", () => {
+        const newRoute = sel.value;
+        // Update row route
+        const updated = { ...row, route: newRoute };
+        // days shown in UI will update after save; but we also want UI immediate:
+        if (newRoute && routeMeta[newRoute] && routeMeta[newRoute].days) {
+          updated.days = routeMeta[newRoute].days;
+        }
+        allRows[idx] = updated;
+        dirtyRows.set(`${updated.prefix}||${updated.channel}`, updated);
+        markDirty();
+        render(); // re-render to refresh days cell
+        updatePreview();
+      });
+
+      td.appendChild(sel);
+      return td;
+    }
+
+    function makeServiceTypeCell(idx, row) {
+      const td = document.createElement("td");
+      td.className = "col-service";
+
+      const sel = document.createElement("select");
+      sel.style.width = "100%";
+      ["","One-person","Two-person"].forEach(v => sel.appendChild(new Option(v || "(blank)", v)));
+      sel.value = row.serviceType || "";
+
+      sel.addEventListener("change", () => {
+        const updated = { ...row, serviceType: sel.value };
+        allRows[idx] = updated;
+        dirtyRows.set(`${updated.prefix}||${updated.channel}`, updated);
+        markDirty();
+      });
+
+      td.appendChild(sel);
+      return td;
+    }
+
+    function makeLeadTimeCell(idx, row) {
+      const td = document.createElement("td");
+      td.className = "col-lead";
+
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.value = row.leadTime || "";
+      inp.style.width = "100%";
+
+      inp.addEventListener("blur", () => {
+        const v = inp.value.trim();
+        if (v === (row.leadTime || "")) return;
+        const updated = { ...row, leadTime: v };
+        allRows[idx] = updated;
+        dirtyRows.set(`${updated.prefix}||${updated.channel}`, updated);
+        markDirty();
+      });
+
+      td.appendChild(inp);
+      return td;
+    }
+
+    /**************************************************************
+     * Channel radios
+     **************************************************************/
+    const channelRadios = document.getElementById("channelRadios");
+    function buildChannelRadios() {
+      channelRadios.innerHTML = "";
+      const list = ["ALL", ...channels];
+
+      list.forEach(ch => {
+        const id = "ch_" + ch.replace(/\W+/g,"_");
+        const wrap = document.createElement("label");
+        wrap.htmlFor = id;
+        wrap.innerHTML = `<input type="radio" name="channelFilter" id="${id}" value="${ch}"> ${ch}`;
+        channelRadios.appendChild(wrap);
+      });
+
+      // default
+      selectedChannel = "ALL";
+      channelRadios.querySelector(`input[value="ALL"]`).checked = true;
+
+      channelRadios.addEventListener("change", (e) => {
+        if (e.target && e.target.name === "channelFilter") {
+          selectedChannel = e.target.value;
+          rebuildRouteDropdowns();
+          render();
+          updatePreview();
+        }
+      });
+    }
+
+    /**************************************************************
+     * Bulk logic
+     **************************************************************/
+    const bulkTargetMode = document.getElementById("bulkTargetMode");
+    const rangeFrom = document.getElementById("rangeFrom");
+    const rangeTo = document.getElementById("rangeTo");
+
+    const bulkRoute = document.getElementById("bulkRoute");
+    const bulkServiceType = document.getElementById("bulkServiceType");
+    const bulkLeadTime = document.getElementById("bulkLeadTime");
 
     function normalisePrefix(v) {
-      return String(v || "").toUpperCase().replace(/\s+/g, "").trim();
+      return String(v || "").toUpperCase().replace(/\s+/g,"").trim();
     }
-
-    const weekdaySet = new Set(["monday","tuesday","wednesday","thursday","friday","saturday","sunday"]);
-
-    function normaliseDaysPipe(daysPipe) {
-      const parts = String(daysPipe || "")
-        .split("|")
-        .map(s => s.trim())
-        .filter(Boolean);
-
-      const valid = [];
-      for (const p of parts) {
-        const lower = p.toLowerCase();
-        if (weekdaySet.has(lower)) {
-          valid.push(lower.charAt(0).toUpperCase() + lower.slice(1));
-        } else {
-          valid.push(p);
-        }
-      }
-      return valid.join("|");
-    }
-
-    function isDaysPipeValid(daysPipe) {
-      const parts = String(daysPipe || "").split("|").map(s => s.trim()).filter(Boolean);
-      if (!parts.length) return false;
-      return parts.every(p => weekdaySet.has(p.toLowerCase()));
-    }
-
-    // ============================================================
-    // EXTENDED PREFIX RANGE MATCHER
-    // Supports:
-    // - CO1 -> CO15
-    // - CO -> CO (all CO*)
-    // - CO -> CV (letter range)
-    // - M -> M34 (mixed)
-    // - CO10 -> CO (CO10+)
-    // ============================================================
 
     function splitPrefix(p) {
       const s = normalisePrefix(p);
@@ -326,258 +602,38 @@
       return { letters: m[1], num: m[2] ? parseInt(m[2], 10) : null, raw: s };
     }
 
-    function cmpLetters(aLetters, bLetters) {
-      return String(aLetters || "").localeCompare(String(bLetters || ""));
-    }
+    function cmpLetters(a,b){ return String(a||"").localeCompare(String(b||"")); }
 
     function prefixInRange(prefix, fromP, toP) {
       const p = splitPrefix(prefix);
       const a = splitPrefix(fromP);
       const b = splitPrefix(toP);
-
       if (!p.letters || !a.letters || !b.letters) return false;
 
-      // Normalise direction
       let from = a, to = b;
-      const letterCmp = cmpLetters(from.letters, to.letters);
-      if (letterCmp > 0) { from = b; to = a; }
-      else if (letterCmp === 0) {
-        // same letters: normalise numeric direction too
+      const lc = cmpLetters(from.letters, to.letters);
+      if (lc > 0) { from = b; to = a; }
+      else if (lc === 0) {
         const fromNum = from.num ?? -Infinity;
         const toNum = to.num ?? Infinity;
-        if (fromNum > toNum) { const tmp = from; from = to; to = tmp; }
+        if (fromNum > toNum) { const t = from; from = to; to = t; }
       }
 
-      // Letter-range check
-      const lettersOK =
-        cmpLetters(p.letters, from.letters) >= 0 &&
-        cmpLetters(p.letters, to.letters) <= 0;
-
+      const lettersOK = cmpLetters(p.letters, from.letters) >= 0 && cmpLetters(p.letters, to.letters) <= 0;
       if (!lettersOK) return false;
 
-      // If letters are strictly between boundaries, include whole letters block
       if (p.letters !== from.letters && p.letters !== to.letters) return true;
 
-      // On boundary letters, apply numeric constraints if present
       const pNum = (p.num === null) ? 0 : p.num;
 
       if (p.letters === from.letters && from.num !== null) {
         if (pNum < from.num) return false;
       }
-
       if (p.letters === to.letters && to.num !== null) {
         if (pNum > to.num) return false;
       }
-
       return true;
     }
-
-    // ============================================================
-    // LOAD / SAVE
-    // ============================================================
-
-    const statusBox = document.getElementById("statusBox");
-    const reloadBtn = document.getElementById("reloadBtn");
-    const downloadBtn = document.getElementById("downloadBtn");
-
-    function setStatus(msg, bad=false) {
-      statusBox.textContent = msg;
-      statusBox.classList.toggle("bad", !!bad);
-    }
-
-    function markDirty() {
-      dirty = true;
-      downloadBtn.disabled = false;
-    }
-
-    async function loadRoutesCsv() {
-      setStatus("Loading routes.csv…");
-      downloadBtn.disabled = true;
-      dirty = false;
-
-      const url = "routes.csv?cb=" + Date.now();
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error("Failed to load routes.csv");
-
-      const text = await resp.text();
-      const parsed = parseDelimited(text);
-
-      routes = parsed.rows.map(r => ({
-        prefix: normalisePrefix(r.prefix),
-        route: String(r.route || "").trim(),
-        channel: String(r.channel || "").trim(),
-        serviceType: String(r.serviceType || "").trim(),
-        leadTime: String(r.leadTime || "").trim(),
-        days: normaliseDaysPipe(r.days || "")
-      })).filter(r => r.prefix && r.channel);
-
-      setStatus(`Loaded ${routes.length.toLocaleString()} rows.`);
-      render();
-      updatePreview();
-    }
-
-    function downloadUpdatedCsv() {
-      const lines = [];
-      lines.push(headersOut.join(","));
-
-      for (const r of routes) {
-        lines.push([
-          toCsvSafe(r.prefix),
-          toCsvSafe(r.route),
-          toCsvSafe(r.channel),
-          toCsvSafe(r.serviceType),
-          toCsvSafe(r.leadTime),
-          toCsvSafe(normaliseDaysPipe(r.days))
-        ].join(","));
-      }
-
-      const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "routes.csv";
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setStatus("Downloaded updated routes.csv (commit it back to GitHub).");
-    }
-
-    // ============================================================
-    // FILTER + SORT (postcode order)
-    // ============================================================
-
-    const filterPrefix = document.getElementById("filterPrefix");
-    const filterChannel = document.getElementById("filterChannel");
-    const filterRoute = document.getElementById("filterRoute");
-    const applyFiltersBtn = document.getElementById("applyFiltersBtn");
-
-    function passesFilters(r) {
-      const fp = filterPrefix.value.trim().toUpperCase();
-      const fc = filterChannel.value.trim().toLowerCase();
-      const fr = filterRoute.value.trim().toLowerCase();
-
-      if (fp && !r.prefix.includes(fp)) return false;
-      if (fc && !r.channel.toLowerCase().includes(fc)) return false;
-      if (fr && !r.route.toLowerCase().includes(fr)) return false;
-      return true;
-    }
-
-    function sortByPrefixThenChannel(a, b) {
-      if (a.prefix !== b.prefix) return a.prefix.localeCompare(b.prefix);
-      return a.channel.localeCompare(b.channel);
-    }
-
-    // ============================================================
-    // RENDER TABLE + INLINE EDITING
-    // ============================================================
-
-    const tbody = document.getElementById("tbody");
-    const masterCheck = document.getElementById("masterCheck");
-
-    function render() {
-      view = routes
-        .map((row, idx) => ({ row, idx }))
-        .filter(x => passesFilters(x.row))
-        .sort((x, y) => sortByPrefixThenChannel(x.row, y.row));
-
-      tbody.innerHTML = "";
-
-      for (const item of view) {
-        const r = item.row;
-        const tr = document.createElement("tr");
-
-        const tdC = document.createElement("td");
-        tdC.className = "col-check";
-        tdC.innerHTML = `<input type="checkbox" class="rowCheck" data-idx="${item.idx}">`;
-        tr.appendChild(tdC);
-
-        tr.appendChild(makeEditableCell(item.idx, "prefix", r.prefix, "col-prefix", { upper:true, validatePrefix:true }));
-        tr.appendChild(makeEditableCell(item.idx, "route", r.route, "col-route"));
-        tr.appendChild(makeEditableCell(item.idx, "channel", r.channel, "col-channel"));
-        tr.appendChild(makeEditableCell(item.idx, "serviceType", r.serviceType, "col-service"));
-        tr.appendChild(makeEditableCell(item.idx, "leadTime", r.leadTime, "col-lead"));
-        tr.appendChild(makeEditableCell(item.idx, "days", r.days, "col-days", { validateDays:true }));
-
-        tbody.appendChild(tr);
-      }
-
-      masterCheck.checked = false;
-      setStatus(`Showing ${view.length.toLocaleString()} of ${routes.length.toLocaleString()} rows.`);
-    }
-
-    function makeEditableCell(routeIdx, field, value, className, opts={}) {
-      const td = document.createElement("td");
-      td.className = className;
-
-      const div = document.createElement("div");
-      div.className = "cell-edit";
-      div.contentEditable = "true";
-      div.spellcheck = false;
-      div.dataset.idx = routeIdx;
-      div.dataset.field = field;
-      div.textContent = value ?? "";
-
-      let original = div.textContent;
-
-      function validateCurrent() {
-        div.classList.remove("invalid");
-
-        if (opts.validateDays) {
-          const v = div.textContent.trim();
-          if (!isDaysPipeValid(v)) div.classList.add("invalid");
-        }
-        if (opts.validatePrefix) {
-          const v = normalisePrefix(div.textContent);
-          if (!/^[A-Z]{1,4}\d{0,4}$/.test(v)) div.classList.add("invalid");
-        }
-      }
-
-      div.addEventListener("focus", () => { original = div.textContent; });
-
-      div.addEventListener("input", validateCurrent);
-
-      div.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); div.blur(); }
-        if (e.key === "Escape") {
-          e.preventDefault();
-          div.textContent = original;
-          validateCurrent();
-          div.blur();
-        }
-      });
-
-      div.addEventListener("blur", () => {
-        let v = div.textContent;
-
-        if (opts.upper) v = v.toUpperCase();
-        v = v.trim();
-
-        if (field === "prefix") v = normalisePrefix(v);
-        if (field === "days") v = normaliseDaysPipe(v);
-
-        if (div.textContent !== v) div.textContent = v;
-
-        validateCurrent();
-
-        if (v !== (routes[routeIdx][field] ?? "")) {
-          if (div.classList.contains("invalid")) {
-            div.textContent = routes[routeIdx][field] ?? "";
-            div.classList.remove("invalid");
-            return;
-          }
-          routes[routeIdx][field] = v;
-          markDirty();
-          updatePreview(); // selection count may depend on prefixes
-        }
-      });
-
-      td.appendChild(div);
-      return td;
-    }
-
-    // ============================================================
-    // SELECTION HELPERS
-    // ============================================================
 
     function getCheckedIndexes() {
       return Array.from(document.querySelectorAll(".rowCheck:checked"))
@@ -585,109 +641,74 @@
         .filter(n => Number.isFinite(n));
     }
 
-    function setAllVisibleChecks(checked) {
-      document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = checked);
-      masterCheck.checked = checked;
-      updatePreview();
-    }
-
-    masterCheck.addEventListener("change", () => setAllVisibleChecks(masterCheck.checked));
-
-    document.getElementById("tickAllVisibleBtn").addEventListener("click", () => setAllVisibleChecks(true));
-    document.getElementById("untickAllVisibleBtn").addEventListener("click", () => setAllVisibleChecks(false));
-
-    // ============================================================
-    // BULK UPDATE (selected / prefix-range / filtered)
-    // ============================================================
-
-    const bulkTargetMode = document.getElementById("bulkTargetMode");
-    const rangeFrom = document.getElementById("rangeFrom");
-    const rangeTo = document.getElementById("rangeTo");
-
-    const bulkRoute = document.getElementById("bulkRoute");
-    const bulkChannel = document.getElementById("bulkChannel");
-    const bulkServiceType = document.getElementById("bulkServiceType");
-    const bulkLeadTime = document.getElementById("bulkLeadTime");
-    const bulkDays = document.getElementById("bulkDays");
-
-    function isValidPrefixToken(s) {
-      const v = normalisePrefix(s);
-      return /^[A-Z]+(\d+)?$/.test(v);
-    }
-
-    function getBulkTargets(modeOverride=null) {
-      const mode = modeOverride || bulkTargetMode.value;
-
+    function getBulkTargets() {
+      const mode = bulkTargetMode.value;
       if (mode === "selected") return getCheckedIndexes();
-
       if (mode === "filtered") return view.map(v => v.idx);
-
       if (mode === "range") {
         const fromP = rangeFrom.value.trim();
         const toP = rangeTo.value.trim();
         if (!fromP || !toP) return [];
-
         const fromN = normalisePrefix(fromP);
         const toN = normalisePrefix(toP);
 
-        if (!isValidPrefixToken(fromN) || !isValidPrefixToken(toN)) return [];
+        const ok = /^[A-Z]+(\d+)?$/.test(fromN) && /^[A-Z]+(\d+)?$/.test(toN);
+        if (!ok) return [];
 
         const targets = [];
-        for (let i = 0; i < routes.length; i++) {
-          if (prefixInRange(routes[i].prefix, fromN, toN)) targets.push(i);
+        for (let i=0;i<allRows.length;i++) {
+          const r = allRows[i];
+          if (selectedChannel !== "ALL" && r.channel !== selectedChannel) continue;
+          if (prefixInRange(r.prefix, fromN, toN)) targets.push(i);
         }
         return targets;
       }
-
       return [];
     }
 
+    function rebuildRouteDropdowns() {
+      // Bulk dropdown routes should respect selectedChannel (if not ALL), otherwise show all
+      bulkRoute.innerHTML = "";
+      bulkRoute.appendChild(new Option("(no change)", ""));
+
+      let routeNames = Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b));
+
+      if (selectedChannel !== "ALL") {
+        routeNames = routeNames.filter(r => routeAllowedForChannel(r, selectedChannel));
+      }
+
+      routeNames.forEach(rn => bulkRoute.appendChild(new Option(rn, rn)));
+    }
+
     function applyBulkUpdate() {
-      const mode = bulkTargetMode.value;
-      const targets = getBulkTargets(mode);
+      const targets = getBulkTargets();
+      if (!targets.length) { alert("No target rows found."); return; }
 
-      if (!targets.length) {
-        alert("No target rows found for the chosen bulk mode.");
-        return;
-      }
-
-      if (mode === "range") {
-        const fromP = rangeFrom.value.trim();
-        const toP = rangeTo.value.trim();
-        if (!fromP || !toP) {
-          alert("Enter both From prefix and To prefix for prefix-range mode.");
-          return;
-        }
-        if (!isValidPrefixToken(fromP) || !isValidPrefixToken(toP)) {
-          alert("Prefix range must be letters with optional numbers (e.g. CO, CO10, M, M34).");
-          return;
-        }
-      }
-
-      const routeVal = bulkRoute.value.trim();
-      const channelVal = bulkChannel.value.trim();
+      const routeVal = bulkRoute.value;
       const serviceVal = bulkServiceType.value;
       const leadVal = bulkLeadTime.value.trim();
-      const daysValRaw = bulkDays.value.trim();
-      const daysVal = daysValRaw ? normaliseDaysPipe(daysValRaw) : "";
 
-      if (daysValRaw && !isDaysPipeValid(daysValRaw)) {
-        alert("Delivery Days must be pipe-separated weekdays, e.g. Monday|Wednesday|Friday");
-        return;
-      }
-
-      if (!routeVal && !channelVal && !serviceVal && !leadVal && !daysValRaw) {
+      if (!routeVal && !serviceVal && !leadVal) {
         alert("No bulk fields entered (nothing to change).");
         return;
       }
 
       targets.forEach(idx => {
-        const r = routes[idx];
-        if (routeVal) r.route = routeVal;
-        if (channelVal) r.channel = channelVal;
-        if (serviceVal) r.serviceType = serviceVal;
-        if (leadVal) r.leadTime = leadVal;
-        if (daysValRaw) r.days = daysVal;
+        const row = allRows[idx];
+        const updated = { ...row };
+
+        if (routeVal) {
+          // Channel scope enforcement in UI
+          const allowed = (row.channel && routeAllowedForChannel(routeVal, row.channel));
+          if (!allowed) return; // skip silently (or you can count/report)
+          updated.route = routeVal;
+          if (routeMeta[routeVal] && routeMeta[routeVal].days) updated.days = routeMeta[routeVal].days;
+        }
+        if (serviceVal) updated.serviceType = serviceVal;
+        if (leadVal) updated.leadTime = leadVal;
+
+        allRows[idx] = updated;
+        dirtyRows.set(`${updated.prefix}||${updated.channel}`, updated);
       });
 
       markDirty();
@@ -698,41 +719,9 @@
 
     document.getElementById("applyBulkBtn").addEventListener("click", applyBulkUpdate);
 
-    // ============================================================
-    // DELETE + ADD ROW
-    // ============================================================
-
-    document.getElementById("deleteSelectedBtn").addEventListener("click", () => {
-      const idxs = getCheckedIndexes();
-      if (!idxs.length) { alert("No rows ticked."); return; }
-      if (!confirm(`Delete ${idxs.length} rows? This can’t be undone (until you reload).`)) return;
-
-      idxs.sort((a,b)=>b-a).forEach(i => routes.splice(i,1));
-      markDirty();
-      render();
-      updatePreview();
-      setStatus(`Deleted ${idxs.length} rows.`);
-    });
-
-    document.getElementById("addRowBtn").addEventListener("click", () => {
-      routes.push({
-        prefix: "",
-        route: "",
-        channel: "",
-        serviceType: "",
-        leadTime: "",
-        days: "Monday"
-      });
-      markDirty();
-      render();
-      updatePreview();
-      setStatus("Added a new row at the end (scroll to find it, then edit).");
-    });
-
-    // ============================================================
-    // PREVIEW COUNT
-    // ============================================================
-
+    /**************************************************************
+     * Preview
+     **************************************************************/
     const previewBox = document.getElementById("previewBox");
     const previewModeText = document.getElementById("previewModeText");
     const previewCount = document.getElementById("previewCount");
@@ -746,30 +735,20 @@
       let bad = false;
 
       if (mode === "selected") {
-        targets = getBulkTargets("selected");
+        targets = getCheckedIndexes();
         previewModeText.textContent = "Mode: ticked rows";
         detail = "ticked rows";
       } else if (mode === "filtered") {
-        targets = getBulkTargets("filtered");
+        targets = view.map(v => v.idx);
         previewModeText.textContent = "Mode: filtered results";
         detail = "visible rows";
       } else if (mode === "range") {
+        previewModeText.textContent = "Mode: prefix range";
         const fromP = rangeFrom.value.trim();
         const toP = rangeTo.value.trim();
-        previewModeText.textContent = "Mode: prefix range";
-        detail = "rows in range";
-
-        if (!fromP || !toP) {
-          targets = [];
-          bad = true;
-          detail = "enter From + To";
-        } else if (!isValidPrefixToken(fromP) || !isValidPrefixToken(toP)) {
-          targets = [];
-          bad = true;
-          detail = "invalid range format";
-        } else {
-          targets = getBulkTargets("range");
-        }
+        if (!fromP || !toP) { bad = true; detail = "enter From + To"; }
+        else if (!/^[A-Z]+(\d+)?$/i.test(fromP) || !/^[A-Z]+(\d+)?$/i.test(toP)) { bad = true; detail = "invalid range format"; }
+        else targets = getBulkTargets();
       }
 
       previewCount.textContent = targets.length.toLocaleString();
@@ -779,46 +758,310 @@
 
     previewRefreshBtn.addEventListener("click", updatePreview);
 
-    // Update preview when ticks change
     document.addEventListener("change", (e) => {
-      if (e.target && e.target.classList && e.target.classList.contains("rowCheck")) {
-        updatePreview();
-      }
+      if (e.target && e.target.classList && e.target.classList.contains("rowCheck")) updatePreview();
     });
 
     bulkTargetMode.addEventListener("change", updatePreview);
     rangeFrom.addEventListener("input", updatePreview);
     rangeTo.addEventListener("input", updatePreview);
 
-    // ============================================================
-    // UI EVENTS
-    // ============================================================
+    /**************************************************************
+     * Selection helpers
+     **************************************************************/
+    function setAllVisibleChecks(checked) {
+      document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = checked);
+      masterCheck.checked = checked;
+      updatePreview();
+    }
+    masterCheck.addEventListener("change", () => setAllVisibleChecks(masterCheck.checked));
+    document.getElementById("tickAllVisibleBtn").addEventListener("click", () => setAllVisibleChecks(true));
+    document.getElementById("untickAllVisibleBtn").addEventListener("click", () => setAllVisibleChecks(false));
 
-    applyFiltersBtn.addEventListener("click", () => { render(); updatePreview(); });
+    /**************************************************************
+     * Manage Routes modal
+     **************************************************************/
+    const modalBackdrop = document.getElementById("modalBackdrop");
+    const manageRoutesBtn = document.getElementById("manageRoutesBtn");
+    const closeModalBtn = document.getElementById("closeModalBtn");
+    const routeList = document.getElementById("routeList");
+    const addRouteBtn = document.getElementById("addRouteBtn");
+    const newRouteName = document.getElementById("newRouteName");
+    const discardRouteChangesBtn = document.getElementById("discardRouteChangesBtn");
+    const applyRouteChangesBtn = document.getElementById("applyRouteChangesBtn");
 
-    filterPrefix.addEventListener("keydown", (e) => { if (e.key === "Enter") { render(); updatePreview(); }});
-    filterChannel.addEventListener("keydown", (e) => { if (e.key === "Enter") { render(); updatePreview(); }});
-    filterRoute.addEventListener("keydown", (e) => { if (e.key === "Enter") { render(); updatePreview(); }});
+    let modalDraftMeta = null;
 
-    reloadBtn.addEventListener("click", async () => {
-      if (dirty && !confirm("You have unsaved changes (not downloaded). Reload anyway?")) return;
-      try { await loadRoutesCsv(); }
-      catch (e) { console.error(e); setStatus(String(e.message || e), true); }
+    function openModal() {
+      modalDraftMeta = JSON.parse(JSON.stringify(routeMeta || {}));
+      buildRouteList();
+      modalBackdrop.style.display = "flex";
+      modalBackdrop.setAttribute("aria-hidden", "false");
+    }
+
+    function closeModal() {
+      modalBackdrop.style.display = "none";
+      modalBackdrop.setAttribute("aria-hidden", "true");
+      modalDraftMeta = null;
+    }
+
+    manageRoutesBtn.addEventListener("click", openModal);
+    closeModalBtn.addEventListener("click", closeModal);
+
+    function buildRouteList() {
+      routeList.innerHTML = "";
+
+      const routeNames = Object.keys(modalDraftMeta || {}).sort((a,b)=>a.localeCompare(b));
+      routeNames.forEach(routeName => {
+        const meta = modalDraftMeta[routeName] || { days:"Monday", channels:"ALL" };
+        const usedCount = allRows.filter(r => r.route === routeName).length;
+
+        const item = document.createElement("div");
+        item.className = "route-item";
+
+        // Name
+        const nameBox = document.createElement("div");
+        nameBox.innerHTML = `
+          <div class="route-name">${escapeHtml(routeName)}</div>
+          <div class="route-meta">${usedCount.toLocaleString()} rows currently use this route</div>
+        `;
+
+        // Days
+        const daysBox = document.createElement("div");
+        const daysWrap = document.createElement("div");
+        daysWrap.className = "chkgrid";
+        const daysSet = new Set(String(meta.days || "").split("|").map(s=>s.trim()).filter(Boolean));
+        ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].forEach(d => {
+          const id = `d_${slug(routeName)}_${d}`;
+          const lab = document.createElement("label");
+          lab.innerHTML = `<input type="checkbox" id="${id}" ${daysSet.has(d) ? "checked":""}> ${d.slice(0,3)}`;
+          lab.querySelector("input").addEventListener("change", () => {
+            const chosen = [];
+            ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].forEach(dd => {
+              const chk = document.getElementById(`d_${slug(routeName)}_${dd}`);
+              if (chk && chk.checked) chosen.push(dd);
+            });
+            if (!chosen.length) {
+              // force at least one day
+              document.getElementById(`d_${slug(routeName)}_Monday`).checked = true;
+              chosen.push("Monday");
+            }
+            modalDraftMeta[routeName].days = chosen.join("|");
+          });
+          daysWrap.appendChild(lab);
+        });
+        daysBox.appendChild(daysWrap);
+
+        // Channels scope
+        const scopeBox = document.createElement("div");
+        const scopeWrap = document.createElement("div");
+        scopeWrap.className = "chkgrid";
+
+        const allId = `all_${slug(routeName)}`;
+        const allLab = document.createElement("label");
+        allLab.innerHTML = `<input type="checkbox" id="${allId}"> ALL channels`;
+        scopeWrap.appendChild(allLab);
+
+        const allowed = meta.channels === "ALL" ? null : new Set(Array.isArray(meta.channels) ? meta.channels : []);
+        const channelChecks = [];
+
+        channels.forEach(ch => {
+          const cid = `c_${slug(routeName)}_${slug(ch)}`;
+          const lab = document.createElement("label");
+          lab.innerHTML = `<input type="checkbox" id="${cid}"> ${escapeHtml(ch)}`;
+          scopeWrap.appendChild(lab);
+          channelChecks.push({ ch, id: cid });
+        });
+
+        // init
+        const allChk = allLab.querySelector("input");
+        allChk.checked = (meta.channels === "ALL");
+
+        channelChecks.forEach(({ch,id}) => {
+          const chk = scopeWrap.querySelector(`#${CSS.escape(id)}`);
+          chk.checked = (meta.channels === "ALL") ? false : (allowed && allowed.has(ch));
+          chk.disabled = allChk.checked;
+          chk.addEventListener("change", () => {
+            const picked = channelChecks.filter(x => scopeWrap.querySelector(`#${CSS.escape(x.id)}`).checked).map(x=>x.ch);
+            modalDraftMeta[routeName].channels = picked.length ? picked : "ALL";
+            // if none picked, fallback ALL to avoid a dead route
+            if (modalDraftMeta[routeName].channels === "ALL") {
+              allChk.checked = true;
+              channelChecks.forEach(x => {
+                const c = scopeWrap.querySelector(`#${CSS.escape(x.id)}`);
+                c.checked = false; c.disabled = true;
+              });
+            }
+          });
+        });
+
+        allChk.addEventListener("change", () => {
+          if (allChk.checked) {
+            modalDraftMeta[routeName].channels = "ALL";
+            channelChecks.forEach(x => {
+              const c = scopeWrap.querySelector(`#${CSS.escape(x.id)}`);
+              c.checked = false; c.disabled = true;
+            });
+          } else {
+            // require at least one channel when not ALL
+            channelChecks.forEach(x => scopeWrap.querySelector(`#${CSS.escape(x.id)}`).disabled = false);
+            // Default: pick current selectedChannel if set, else first channel
+            const defaultCh = (selectedChannel !== "ALL") ? selectedChannel : (channels[0] || "");
+            if (defaultCh) {
+              const target = channelChecks.find(x => x.ch === defaultCh);
+              if (target) scopeWrap.querySelector(`#${CSS.escape(target.id)}`).checked = true;
+              modalDraftMeta[routeName].channels = [defaultCh];
+            } else {
+              modalDraftMeta[routeName].channels = "ALL";
+              allChk.checked = true;
+            }
+          }
+        });
+
+        scopeBox.appendChild(scopeWrap);
+
+        // Actions
+        const actions = document.createElement("div");
+        actions.className = "route-actions";
+        const delBtn = document.createElement("button");
+        delBtn.className = "danger";
+        delBtn.textContent = "Delete";
+        delBtn.title = "Cannot delete if still assigned";
+        delBtn.addEventListener("click", () => {
+          if (usedCount > 0) { alert("You can’t delete this route because postcodes are still assigned to it."); return; }
+          if (!confirm(`Delete route "${routeName}"?`)) return;
+          delete modalDraftMeta[routeName];
+          buildRouteList();
+        });
+        actions.appendChild(delBtn);
+
+        item.appendChild(nameBox);
+        item.appendChild(daysBox);
+        item.appendChild(scopeBox);
+        item.appendChild(actions);
+
+        routeList.appendChild(item);
+      });
+    }
+
+    addRouteBtn.addEventListener("click", () => {
+      const name = (newRouteName.value || "").trim();
+      if (!name) { alert("Enter a route name."); return; }
+      if (modalDraftMeta[name]) { alert("That route already exists."); return; }
+      modalDraftMeta[name] = { days: "Monday", channels: "ALL" };
+      newRouteName.value = "";
+      buildRouteList();
     });
 
-    downloadBtn.addEventListener("click", downloadUpdatedCsv);
+    discardRouteChangesBtn.addEventListener("click", () => {
+      if (!confirm("Discard route changes?")) return;
+      modalDraftMeta = JSON.parse(JSON.stringify(routeMeta || {}));
+      buildRouteList();
+    });
 
-    // ============================================================
-    // INIT
-    // ============================================================
+    applyRouteChangesBtn.addEventListener("click", () => {
+      // Convert diff into dirtyRouteUpdates
+      const before = routeMeta || {};
+      const after = modalDraftMeta || {};
 
+      // deletions
+      Object.keys(before).forEach(rn => {
+        if (!after[rn]) {
+          dirtyRouteUpdates.set(rn, { op:"delete", route: rn });
+        }
+      });
+
+      // upserts (new or changed)
+      Object.keys(after).forEach(rn => {
+        const a = after[rn] || {};
+        const b = before[rn] || {};
+        const aDays = String(a.days || "Monday");
+        const bDays = String(b.days || "");
+        const aCh = (a.channels === "ALL") ? "ALL" : JSON.stringify(a.channels || []);
+        const bCh = (b.channels === "ALL") ? "ALL" : JSON.stringify(b.channels || []);
+
+        if (!before[rn] || aDays !== bDays || aCh !== bCh) {
+          dirtyRouteUpdates.set(rn, {
+            op:"upsert",
+            route: rn,
+            days: aDays,
+            channels: (a.channels === "ALL") ? "ALL" : (a.channels || [])
+          });
+        }
+      });
+
+      // Apply draft to live meta for immediate UI behaviour
+      routeMeta = JSON.parse(JSON.stringify(after));
+      rebuildRouteDropdowns();
+      render();
+      updatePreview();
+      markDirty();
+      closeModal();
+      setStatus("Route changes staged. Click Save to commit to the Sheet.");
+    });
+
+    function slug(s){ return String(s||"").toLowerCase().replace(/\W+/g,"_").slice(0,60); }
+    function escapeHtml(s){
+      return String(s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    /**************************************************************
+     * Save
+     **************************************************************/
+    async function saveToSheet() {
+      if (dirtyRows.size === 0 && dirtyRouteUpdates.size === 0) return;
+
+      const rowUpdates = Array.from(dirtyRows.values()).map(r => ({
+        prefix: r.prefix,
+        channel: r.channel,
+        route: r.route,
+        serviceType: r.serviceType,
+        leadTime: r.leadTime
+      }));
+
+      const routeUpdates = Array.from(dirtyRouteUpdates.values());
+
+      setStatus("Saving to Google Sheet…");
+      saveBtn.disabled = true;
+
+      const payload = encodeURIComponent(JSON.stringify({ version, rowUpdates, routeUpdates }));
+      const res = await jsonp(`${API_BASE}?action=save&payload=${payload}&cb=${Date.now()}`);
+
+      if (!res || !res.ok) {
+        setStatus(res && res.error ? res.error : "Save failed", true);
+        saveBtn.disabled = false;
+        return;
+      }
+
+      setStatus(`Saved. Updated rows: ${res.updatedRows || 0}. Corrected day cells: ${res.correctedDays || 0}.`);
+      await loadFromSheet();
+    }
+
+    saveBtn.addEventListener("click", saveToSheet);
+
+    /**************************************************************
+     * UI events
+     **************************************************************/
+    applyFiltersBtn.addEventListener("click", () => { render(); updatePreview(); });
+
+    filterPrefix.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ render(); updatePreview(); }});
+    filterRoute.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ render(); updatePreview(); }});
+
+    reloadBtn.addEventListener("click", async () => {
+      if ((dirtyRows.size || dirtyRouteUpdates.size) && !confirm("You have unsaved changes. Reload anyway?")) return;
+      try { await loadFromSheet(); }
+      catch (e) { console.error(e); setStatus(String(e.message||e), true); }
+    });
+
+    /**************************************************************
+     * Init
+     **************************************************************/
     (async function init() {
-      downloadBtn.disabled = true;
       try {
-        await loadRoutesCsv();
+        await loadFromSheet();
       } catch (e) {
         console.error(e);
-        setStatus("Failed to load routes.csv. Ensure routes-editor.html and routes.csv are in the same GitHub Pages folder.", true);
+        setStatus("Failed to load. Check API_BASE is set to your Apps Script /exec URL and the script is deployed.", true);
       }
     })();
   </script>
