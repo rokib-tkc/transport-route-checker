@@ -118,7 +118,8 @@
     }
     .archivePill{ left: 16px; }
     .logoutPill{ right: 16px; }
-
+    .routesEditorPill{ left: 92px; }
+    
     /* ---------- ARCHIVE OVERLAY ---------- */
     .overlay{
       position: fixed;
@@ -591,6 +592,7 @@
 
     <!-- TOP PILLS -->
     <div class="topPill archivePill hidden" id="archiveLink" role="button" tabindex="0" aria-label="Open archive">Archive</div>
+    <div class="topPill routesEditorPill hidden" id="routesEditorLink" role="button" tabindex="0" aria-label="Open Routes Editor">Routes Editor</div>
     <div class="topPill logoutPill hidden" id="logoutLink" role="button" tabindex="0" aria-label="Log out">Log out</div>
 
     <div class="top">
@@ -735,6 +737,8 @@
     const archiveWrapEl = document.getElementById("archiveWrap");
     const archiveMsgEl = document.getElementById("archiveMsg");
     const archiveHeadingEl = document.getElementById("archiveHeading");
+
+    const routesEditorLinkEl = document.getElementById("routesEditorLink");
 
     // ============================================================
     // LOADING OVERLAY HELPERS
@@ -1483,6 +1487,7 @@
       appEl.classList.add("hidden");
       controlsEl.classList.add("hidden");
       archiveLinkEl.classList.add("hidden");
+      routesEditorLinkEl.classList.add("hidden");
       logoutLinkEl.classList.add("hidden");
       gateEl.classList.remove("hidden");
 
@@ -1527,6 +1532,7 @@
         appEl.classList.remove("hidden");
         controlsEl.classList.remove("hidden");
         archiveLinkEl.classList.remove("hidden");
+        routesEditorLinkEl.classList.remove("hidden");
         logoutLinkEl.classList.remove("hidden");
 
         // Keep spinner while we load everything
@@ -1566,6 +1572,16 @@
       archiveOverlayEl.classList.add("hidden");
       document.body.style.overflow = "";
     }
+
+    function openRoutesEditor(){
+      window.open("https://rokib-tkc.github.io/transport-route-checker/routes-editor.html", "_blank", "noopener");
+      }
+
+    routesEditorLinkEl.addEventListener("click", openRoutesEditor);
+    routesEditorLinkEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") openRoutesEditor();
+    });
+
 
     function statusPillHTML(status){
       if (status === STATUS.FULL_WEIGHT) return `<span class="pill pillWeight">${STATUS.FULL_WEIGHT}</span>`;
@@ -1733,6 +1749,7 @@
   </script>
 </body>
 </html>
+
 
 
 
