@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Routes Editor (Search-first + Routes Manager)</title>
+  <title>Routes Editor</title>
   <style>
     * { box-sizing:border-box; font-family: Arial, sans-serif; }
     body { margin:0; padding:18px; background:#f5f5f5; color:#222; }
@@ -14,12 +14,11 @@
     .group { background:#fafafa; border:1px solid #e6e6e6; border-radius:10px; padding:12px; }
     label { font-size:12px; font-weight:bold; display:block; margin-bottom:4px; }
     input[type="text"], select {
-      padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; width: 220px;
+      padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; width: 320px;
     }
-    .small { width:150px !important; }
-    .wide { width:320px !important; }
+    .small { width:160px !important; }
     button {
-      padding:9px 12px; border:0; border-radius:6px; background:#0078d4; color:#fff; cursor:pointer; font-size:13px;
+      padding:9px 12px; border:0; border-radius:6px; background:#0078d4; color:#fff; cursor:pointer; font-size: 13px;
     }
     button:hover { background:#005ea3; }
     button:disabled { background:#9bbbd7; cursor:not-allowed; }
@@ -42,10 +41,6 @@
     .col-service { width:140px; }
     .col-lead { width:120px; }
     .col-days { width:220px; }
-
-    .pager { display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap; }
-    .pager .box { background:#fafafa; border:1px solid #e6e6e6; border-radius:10px; padding:10px; }
-    .pager .num { font-weight:700; }
 
     /* Modal */
     .modal-backdrop {
@@ -81,11 +76,15 @@
     .split { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
     .panel { border:1px solid #e6e6e6; border-radius:10px; padding:12px; background:#fff; }
     .input-full { width:100% !important; }
+    .disabled { opacity:.55; pointer-events:none; }
+
+    .hintline { display:flex; align-items:center; gap:10px; }
+    .hintline .pill { margin-left:6px; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Routes Editor <span class="pill">Range search + route dropdown + selected-row updates</span></h1>
+    <h1>Routes Editor <span class="pill">single-filter search</span></h1>
 
     <div class="row">
       <div class="status" id="statusBox">Loading meta…</div>
@@ -97,49 +96,51 @@
     </div>
 
     <div class="group">
-      <div class="row">
-        <div style="min-width:260px;">
-          <div class="muted"><strong>Search (required)</strong></div>
-          <div class="muted">Enter a prefix range. Use the same value in both boxes to view a single prefix.</div>
-        </div>
+      <div class="hintline muted">
+        Search by <strong>one</strong> option only (Channel OR Route OR Prefix Range). Once you pick one, the others disable.
+        <span class="pill" id="activeModePill">No mode selected</span>
+        <button id="clearSearchModeBtn" class="mini-btn" type="button">Clear</button>
+      </div>
 
-        <div>
-          <label>Channel</label>
-          <select id="filterChannel" class="wide">
-            <option value="ALL">ALL</option>
+      <!-- Channel line -->
+      <div class="row" style="align-items:flex-end;">
+        <div style="min-width:220px;">
+          <label>Search by Channel</label>
+          <select id="searchChannel">
+            <option value="">(select channel)</option>
           </select>
         </div>
+      </div>
 
-        <div>
-          <label>Route (optional)</label>
-          <select id="filterRouteExact" class="wide">
-            <option value="">(any route)</option>
+      <!-- Route line -->
+      <div class="row" style="align-items:flex-end;">
+        <div style="min-width:220px;">
+          <label>Search by Route</label>
+          <select id="searchRoute">
+            <option value="">(select route)</option>
           </select>
         </div>
+      </div>
 
+      <!-- Range line -->
+      <div class="row" style="align-items:flex-end;">
+        <div style="min-width:220px;">
+          <label>Search by Prefix Range</label>
+          <div class="muted">Enter both. Same value in both boxes = single prefix.</div>
+        </div>
         <div>
-          <label>From prefix</label>
+          <label>From</label>
           <input id="rangeFrom" type="text" class="small" placeholder="e.g. AB10 or AB"/>
         </div>
-
         <div>
-          <label>To prefix</label>
+          <label>To</label>
           <input id="rangeTo" type="text" class="small" placeholder="e.g. AB14 or AC"/>
         </div>
+      </div>
 
-        <div>
-          <label>Page size</label>
-          <select id="pageSize">
-            <option>200</option>
-            <option selected>500</option>
-            <option>1000</option>
-            <option>2000</option>
-          </select>
-        </div>
-
-        <div>
-          <button id="searchBtn">Search</button>
-        </div>
+      <!-- Search button line -->
+      <div class="row">
+        <button id="searchBtn">Search</button>
       </div>
     </div>
 
@@ -147,12 +148,12 @@
       <div class="row">
         <div style="min-width:260px;">
           <div class="muted"><strong>Apply changes to selected rows</strong></div>
-          <div class="muted">Load results → tick the rows you want → apply fields → Save edits.</div>
+          <div class="muted">Load results → tick rows → apply fields → Save edits.</div>
         </div>
 
         <div>
           <label>Assign Route</label>
-          <select id="bulkRoute" class="wide">
+          <select id="bulkRoute">
             <option value="">(no change)</option>
           </select>
         </div>
@@ -206,13 +207,6 @@
           <tr><td colspan="7" class="muted" style="padding:12px;">Search to load rows.</td></tr>
         </tbody>
       </table>
-    </div>
-
-    <div class="pager" id="pager" style="display:none;">
-      <div class="box">Results: <span class="num" id="totalCount">0</span></div>
-      <button class="mini-btn" id="prevBtn">Prev</button>
-      <button class="mini-btn" id="nextBtn">Next</button>
-      <div class="box">Offset: <span class="num" id="offsetTxt">0</span></div>
     </div>
 
     <div class="muted" style="margin-top:10px;">
@@ -283,22 +277,18 @@
   </div>
 
   <script>
-    /************* CONFIG *************/
     const API_BASE = "https://script.google.com/macros/s/AKfycby2UaJDmzrkxCm27BA4rH3Fo5xHaHk9lWENv7NvxJWHa0L-P2T_SVJPkMagdNX3QDNvLw/exec";
 
-    /************* JSONP *************/
     function jsonp(url) {
       return new Promise((resolve, reject) => {
         const cbName = "cb_" + Math.random().toString(36).slice(2);
         const script = document.createElement("script");
         const sep = url.includes("?") ? "&" : "?";
-        const full = url + sep + "callback=" + encodeURIComponent(cbName);
+        script.src = url + sep + "callback=" + encodeURIComponent(cbName);
 
         window[cbName] = (data) => { cleanup(); resolve(data); };
         script.onerror = () => { cleanup(); reject(new Error("Network error (JSONP)")); };
-
-        function cleanup() { delete window[cbName]; script.remove(); }
-        script.src = full;
+        function cleanup(){ delete window[cbName]; script.remove(); }
         document.body.appendChild(script);
       });
     }
@@ -309,38 +299,109 @@
       statusBox.classList.toggle("bad", !!bad);
     }
 
-    /************* STATE *************/
+    // State
     let channels = [];
     let routeMeta = {};
     let rows = [];
-    let total = 0;
-    let offset = 0;
+    const dirty = new Map(); // prefix||channel -> update
 
-    // edits staged (across pages if you want; here we keep them even if you page)
-    const dirty = new Map(); // key prefix||channel -> {prefix,channel,route,serviceType,leadTime}
+    // Elements
+    const activeModePill = document.getElementById("activeModePill");
+    const clearSearchModeBtn = document.getElementById("clearSearchModeBtn");
 
-    /************* ELEMENTS *************/
-    const filterChannel = document.getElementById("filterChannel");
-    const filterRouteExact = document.getElementById("filterRouteExact");
+    const searchChannel = document.getElementById("searchChannel");
+    const searchRoute = document.getElementById("searchRoute");
     const rangeFrom = document.getElementById("rangeFrom");
     const rangeTo = document.getElementById("rangeTo");
-    const pageSize = document.getElementById("pageSize");
-
-    const tbody = document.getElementById("tbody");
-    const pager = document.getElementById("pager");
-    const totalCount = document.getElementById("totalCount");
-    const offsetTxt = document.getElementById("offsetTxt");
-    const prevBtn = document.getElementById("prevBtn");
-    const nextBtn = document.getElementById("nextBtn");
-
-    const saveEditsBtn = document.getElementById("saveEditsBtn");
-    const masterCheck = document.getElementById("masterCheck");
+    const searchBtn = document.getElementById("searchBtn");
 
     const bulkRoute = document.getElementById("bulkRoute");
     const bulkServiceType = document.getElementById("bulkServiceType");
     const bulkLeadTime = document.getElementById("bulkLeadTime");
+    const applyToSelectedBtn = document.getElementById("applyToSelectedBtn");
 
-    /************* META LOAD *************/
+    const saveEditsBtn = document.getElementById("saveEditsBtn");
+    const reloadMetaBtn = document.getElementById("reloadMetaBtn");
+
+    const tbody = document.getElementById("tbody");
+    const masterCheck = document.getElementById("masterCheck");
+    const tickAllBtn = document.getElementById("tickAllBtn");
+    const untickAllBtn = document.getElementById("untickAllBtn");
+
+    // Modal elements
+    const modalBackdrop = document.getElementById("modalBackdrop");
+    const routesManagerBtn = document.getElementById("routesManagerBtn");
+    const closeModalBtn = document.getElementById("closeModalBtn");
+    const routePick = document.getElementById("routePick");
+    const daysChecks = document.getElementById("daysChecks");
+    const scopeAllChk = document.getElementById("scopeAllChk");
+    const scopeChannels = document.getElementById("scopeChannels");
+    const newRouteName = document.getElementById("newRouteName");
+    const addRouteBtn = document.getElementById("addRouteBtn");
+    const deleteRouteBtn = document.getElementById("deleteRouteBtn");
+    const discardRouteBtn = document.getElementById("discardRouteBtn");
+    const saveRouteBtn = document.getElementById("saveRouteBtn");
+
+    let draftMeta = null;
+
+    function setModePill(mode){
+      activeModePill.textContent =
+        mode === "channel" ? "Mode: Channel" :
+        mode === "route" ? "Mode: Route" :
+        mode === "range" ? "Mode: Prefix range" :
+        "No mode selected";
+    }
+
+    function getSelectedMode(){
+      const ch = searchChannel.value;
+      const rt = searchRoute.value;
+      const rf = rangeFrom.value.trim();
+      const rt2 = rangeTo.value.trim();
+
+      if (ch) return "channel";
+      if (rt) return "route";
+      if (rf || rt2) return "range";
+      return "";
+    }
+
+    function syncModeUI(){
+      const mode = getSelectedMode();
+      setModePill(mode || "");
+
+      const channelBlock = document.getElementById("searchChannel").closest(".row") || null;
+
+      // disable rules
+      if (mode === "channel") {
+        searchRoute.disabled = true;
+        rangeFrom.disabled = true;
+        rangeTo.disabled = true;
+        searchChannel.disabled = false;
+      } else if (mode === "route") {
+        searchChannel.disabled = true;
+        rangeFrom.disabled = true;
+        rangeTo.disabled = true;
+        searchRoute.disabled = false;
+      } else if (mode === "range") {
+        searchChannel.disabled = true;
+        searchRoute.disabled = true;
+        rangeFrom.disabled = false;
+        rangeTo.disabled = false;
+      } else {
+        searchChannel.disabled = false;
+        searchRoute.disabled = false;
+        rangeFrom.disabled = false;
+        rangeTo.disabled = false;
+      }
+    }
+
+    function clearSearchMode(){
+      searchChannel.value = "";
+      searchRoute.value = "";
+      rangeFrom.value = "";
+      rangeTo.value = "";
+      syncModeUI();
+    }
+
     async function loadMeta(){
       setStatus("Loading channels/routes…");
       const res = await jsonp(`${API_BASE}?action=meta&cb=${Date.now()}`);
@@ -349,119 +410,142 @@
       channels = res.channels || [];
       routeMeta = res.routeMeta || {};
 
-      // channels dropdown
-      filterChannel.innerHTML = `<option value="ALL">ALL</option>`;
-      channels.forEach(ch => filterChannel.appendChild(new Option(ch, ch)));
+      // Search dropdowns
+      searchChannel.innerHTML = `<option value="">(select channel)</option>`;
+      channels.forEach(ch => searchChannel.appendChild(new Option(ch, ch)));
 
-      // route dropdowns (search + bulk)
-      rebuildRouteDropdowns();
+      searchRoute.innerHTML = `<option value="">(select route)</option>`;
+      Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b)).forEach(r => searchRoute.appendChild(new Option(r, r)));
 
-      // routes modal
+      // Bulk route dropdown
+      bulkRoute.innerHTML = `<option value="">(no change)</option>`;
+      Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b)).forEach(r => bulkRoute.appendChild(new Option(r, r)));
+
+      // Modal list
       rebuildRoutesModalPicklist();
 
-      setStatus("Ready. Enter a prefix range and search.");
+      setStatus("Ready.");
+      syncModeUI();
     }
 
-    function rebuildRouteDropdowns(){
-      const routes = Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b));
+    // Fetch all matches by auto-paging (API max per call is 2000)
+    async function fetchAllRows(searchMode, params){
+      const all = [];
+      let offset = 0;
+      const limit = 2000;
 
-      filterRouteExact.innerHTML = `<option value="">(any route)</option>`;
-      routes.forEach(r => filterRouteExact.appendChild(new Option(r, r)));
+      while (true) {
+        const qs = new URLSearchParams({
+          action: "search",
+          searchMode,
+          channel: params.channel || "ALL",
+          routeExact: params.routeExact || "",
+          rangeFrom: params.rangeFrom || "",
+          rangeTo: params.rangeTo || "",
+          offset: String(offset),
+          limit: String(limit),
+          cb: String(Date.now())
+        });
 
-      bulkRoute.innerHTML = `<option value="">(no change)</option>`;
-      routes.forEach(r => bulkRoute.appendChild(new Option(r, r)));
-    }
+        const res = await jsonp(`${API_BASE}?${qs.toString()}`);
+        if (!res || !res.ok) throw new Error(res && res.error ? res.error : "Search failed");
 
-    /************* SEARCH *************/
-    function currentSearchParams(){
-      return {
-        channel: filterChannel.value || "ALL",
-        routeExact: filterRouteExact.value || "",
-        rangeFrom: rangeFrom.value.trim(),
-        rangeTo: rangeTo.value.trim(),
-        limit: parseInt(pageSize.value, 10) || 500
-      };
-    }
+        const batch = res.rows || [];
+        all.push(...batch);
 
-    function requireRange(p){
-      if (!p.rangeFrom || !p.rangeTo) {
-        alert("Enter both From prefix and To prefix. (Use the same value in both to search a single prefix.)");
-        return false;
+        const total = res.total || 0;
+        offset += limit;
+
+        if (all.length >= total || batch.length === 0) break;
       }
-      if (!/^[A-Za-z]+(\d+)?$/.test(p.rangeFrom) || !/^[A-Za-z]+(\d+)?$/.test(p.rangeTo)) {
-        alert("Prefix range must be letters with optional numbers (e.g. AB, AB10, M, M34).");
-        return false;
-      }
-      return true;
+
+      return all;
     }
 
-    async function runSearch(newOffset=0){
-      const p = currentSearchParams();
-      if (!requireRange(p)) return;
+    function validateModeAndParams(mode){
+      if (mode === "channel") {
+        if (!searchChannel.value) { alert("Select a Channel."); return null; }
+        return { searchMode:"channel", channel: searchChannel.value };
+      }
+      if (mode === "route") {
+        if (!searchRoute.value) { alert("Select a Route."); return null; }
+        return { searchMode:"route", routeExact: searchRoute.value };
+      }
+      if (mode === "range") {
+        const rf = rangeFrom.value.trim();
+        const rt = rangeTo.value.trim();
+        if (!rf || !rt) { alert("Enter both From and To."); return null; }
+        if (!/^[A-Za-z]+(\d+)?$/.test(rf) || !/^[A-Za-z]+(\d+)?$/.test(rt)) {
+          alert("Prefix range must be letters with optional numbers (e.g. AB, AB10, M, M34).");
+          return null;
+        }
+        return { searchMode:"range", rangeFrom: rf, rangeTo: rt };
+      }
+      alert("Pick one search option (Channel OR Route OR Prefix Range).");
+      return null;
+    }
 
-      offset = Math.max(0, newOffset);
-      setStatus("Searching…");
+    async function runSearch(){
+      const mode = getSelectedMode();
+      const p = validateModeAndParams(mode);
+      if (!p) return;
+
+      dirty.clear();
+      saveEditsBtn.disabled = true;
       masterCheck.checked = false;
 
-      const qs = new URLSearchParams({
-        action: "search",
-        channel: p.channel,
-        routeExact: p.routeExact,
-        rangeFrom: p.rangeFrom,
-        rangeTo: p.rangeTo,
-        offset: String(offset),
-        limit: String(p.limit),
-        cb: String(Date.now())
-      });
+      setStatus("Searching (loading all matches)…");
+      rows = await fetchAllRows(p.searchMode, p);
 
-      const res = await jsonp(`${API_BASE}?${qs.toString()}`);
-      if (!res || !res.ok) throw new Error(res && res.error ? res.error : "Search failed");
-
-      rows = res.rows || [];
-      total = res.total || 0;
-
-      renderTable();
-      renderPager();
-      setStatus(`Loaded ${rows.length.toLocaleString()} rows (page) from ${total.toLocaleString()} matches.`);
+      setStatus(`Loaded ${rows.length.toLocaleString()} rows. Rendering…`);
+      renderTableChunked(rows);
     }
 
-    function renderPager(){
-      pager.style.display = "flex";
-      totalCount.textContent = total.toLocaleString();
-      offsetTxt.textContent = offset.toLocaleString();
-
-      const limit = parseInt(pageSize.value, 10) || 500;
-      prevBtn.disabled = (offset <= 0);
-      nextBtn.disabled = (offset + limit >= total);
-    }
-
-    /************* TABLE *************/
-    function renderTable(){
+    function renderTableChunked(data){
       tbody.innerHTML = "";
-      if (!rows.length) {
+      if (!data.length) {
         tbody.innerHTML = `<tr><td colspan="7" class="muted" style="padding:12px;">No results.</td></tr>`;
+        setStatus("No results.");
         return;
       }
 
-      rows.forEach((r, i) => {
-        const tr = document.createElement("tr");
+      let i = 0;
+      const CHUNK = 250;
 
-        const tdC = document.createElement("td");
-        tdC.className = "col-check";
-        tdC.innerHTML = `<input type="checkbox" class="rowCheck" data-i="${i}">`;
-        tr.appendChild(tdC);
+      const renderChunk = () => {
+        const end = Math.min(i + CHUNK, data.length);
+        const frag = document.createDocumentFragment();
 
-        tr.appendChild(textCell(r.prefix, "col-prefix"));
-        tr.appendChild(textCell(r.channel, "col-channel"));
+        for (; i < end; i++) {
+          const r = data[i];
+          const tr = document.createElement("tr");
 
-        tr.appendChild(routeCell(i, r));
-        tr.appendChild(serviceCell(i, r));
-        tr.appendChild(leadCell(i, r));
+          const tdC = document.createElement("td");
+          tdC.className = "col-check";
+          tdC.innerHTML = `<input type="checkbox" class="rowCheck" data-i="${i}">`;
+          tr.appendChild(tdC);
 
-        tr.appendChild(textCell(r.days, "col-days"));
+          tr.appendChild(textCell(r.prefix, "col-prefix"));
+          tr.appendChild(textCell(r.channel, "col-channel"));
+          tr.appendChild(routeCell(i, r));
+          tr.appendChild(serviceCell(i, r));
+          tr.appendChild(leadCell(i, r));
+          tr.appendChild(textCell(r.days, "col-days"));
 
-        tbody.appendChild(tr);
-      });
+          frag.appendChild(tr);
+        }
+
+        tbody.appendChild(frag);
+
+        if (i < data.length) {
+          setStatus(`Rendering… ${i.toLocaleString()} / ${data.length.toLocaleString()}`);
+          requestAnimationFrame(renderChunk);
+        } else {
+          setStatus(`Ready. Showing ${data.length.toLocaleString()} rows.`);
+        }
+      };
+
+      renderChunk();
     }
 
     function textCell(text, cls){
@@ -469,6 +553,17 @@
       td.className = cls;
       td.textContent = text ?? "";
       return td;
+    }
+
+    function stageRow(r){
+      dirty.set(`${r.prefix}||${r.channel}`, {
+        prefix: r.prefix,
+        channel: r.channel,
+        route: r.route,
+        serviceType: r.serviceType,
+        leadTime: r.leadTime
+      });
+      saveEditsBtn.disabled = (dirty.size === 0);
     }
 
     function routeCell(i, r){
@@ -485,7 +580,9 @@
         r.route = sel.value;
         if (r.route && routeMeta[r.route] && routeMeta[r.route].days) r.days = routeMeta[r.route].days;
         stageRow(r);
-        renderTable(); // refresh days
+        // Update just the Days cell quickly by re-rendering all is heavy; simplest: update DOM cell directly:
+        const tr = sel.closest("tr");
+        if (tr) tr.querySelector(".col-days")?.replaceWith(textCell(r.days, "col-days"));
       });
 
       td.appendChild(sel);
@@ -528,17 +625,10 @@
       return td;
     }
 
-    function stageRow(r){
-      dirty.set(`${r.prefix}||${r.channel}`, { prefix:r.prefix, channel:r.channel, route:r.route, serviceType:r.serviceType, leadTime:r.leadTime });
-      saveEditsBtn.disabled = (dirty.size === 0);
-    }
-
-    /************* APPLY TO SELECTED *************/
     function getSelectedRowsOnPage(){
-      const checked = Array.from(document.querySelectorAll(".rowCheck:checked"))
+      return Array.from(document.querySelectorAll(".rowCheck:checked"))
         .map(cb => rows[Number(cb.dataset.i)])
         .filter(Boolean);
-      return checked;
     }
 
     function applyToSelected(){
@@ -564,15 +654,14 @@
         stageRow(r);
       });
 
-      renderTable();
       setStatus(`Staged changes for ${selected.length.toLocaleString()} selected rows. Click "Save edits" to commit.`);
+      renderTableChunked(rows); // reflect changes
     }
 
-    /************* SAVE EDITS *************/
     async function saveEdits(){
       if (!dirty.size) return;
 
-      setStatus("Saving edits to Google Sheet…");
+      setStatus("Saving edits…");
       saveEditsBtn.disabled = true;
 
       const payload = encodeURIComponent(JSON.stringify({ rowUpdates: Array.from(dirty.values()) }));
@@ -586,48 +675,40 @@
 
       dirty.clear();
       setStatus(`Saved. Updated rows: ${res.updatedRows || 0}. Corrected day cells: ${res.correctedDays || 0}.`);
-      await runSearch(offset);
+      // Re-run current search
+      await runSearch();
     }
 
-    /************* PAGING *************/
-    prevBtn.addEventListener("click", () => {
-      const limit = parseInt(pageSize.value, 10) || 500;
-      runSearch(Math.max(0, offset - limit));
-    });
-    nextBtn.addEventListener("click", () => {
-      const limit = parseInt(pageSize.value, 10) || 500;
-      runSearch(offset + limit);
-    });
-
-    /************* SELECTION HELPERS *************/
+    // Selection helpers
     masterCheck.addEventListener("change", () => {
       document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = masterCheck.checked);
     });
-    document.getElementById("tickAllBtn").addEventListener("click", () => {
+    tickAllBtn.addEventListener("click", () => {
       document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = true);
       masterCheck.checked = true;
     });
-    document.getElementById("untickAllBtn").addEventListener("click", () => {
+    untickAllBtn.addEventListener("click", () => {
       document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = false);
       masterCheck.checked = false;
     });
 
-    /************* ROUTES MODAL *************/
-    const modalBackdrop = document.getElementById("modalBackdrop");
-    const routesManagerBtn = document.getElementById("routesManagerBtn");
-    const closeModalBtn = document.getElementById("closeModalBtn");
-    const routePick = document.getElementById("routePick");
-    const daysChecks = document.getElementById("daysChecks");
-    const scopeAllChk = document.getElementById("scopeAllChk");
-    const scopeChannels = document.getElementById("scopeChannels");
-    const newRouteName = document.getElementById("newRouteName");
-    const addRouteBtn = document.getElementById("addRouteBtn");
-    const deleteRouteBtn = document.getElementById("deleteRouteBtn");
-    const discardRouteBtn = document.getElementById("discardRouteBtn");
-    const saveRouteBtn = document.getElementById("saveRouteBtn");
+    // Search mode UI events
+    searchChannel.addEventListener("change", () => { if (searchChannel.value) { searchRoute.value=""; rangeFrom.value=""; rangeTo.value=""; } syncModeUI(); });
+    searchRoute.addEventListener("change", () => { if (searchRoute.value) { searchChannel.value=""; rangeFrom.value=""; rangeTo.value=""; } syncModeUI(); });
+    rangeFrom.addEventListener("input", () => { if (rangeFrom.value.trim() || rangeTo.value.trim()) { searchChannel.value=""; searchRoute.value=""; } syncModeUI(); });
+    rangeTo.addEventListener("input", () => { if (rangeFrom.value.trim() || rangeTo.value.trim()) { searchChannel.value=""; searchRoute.value=""; } syncModeUI(); });
+    clearSearchModeBtn.addEventListener("click", clearSearchMode);
 
-    let draftMeta = null;
+    // Buttons
+    searchBtn.addEventListener("click", runSearch);
+    applyToSelectedBtn.addEventListener("click", applyToSelected);
+    saveEditsBtn.addEventListener("click", saveEdits);
+    reloadMetaBtn.addEventListener("click", async () => {
+      try { await loadMeta(); setStatus("Meta reloaded."); }
+      catch (e) { console.error(e); setStatus(String(e.message||e), true); }
+    });
 
+    /************* ROUTES MODAL (unchanged logic) *************/
     function openModal(){
       draftMeta = JSON.parse(JSON.stringify(routeMeta || {}));
       rebuildRoutesModalPicklist();
@@ -635,32 +716,26 @@
       modalBackdrop.setAttribute("aria-hidden","false");
       loadRouteIntoEditor(routePick.value);
     }
-
     function closeModal(){
       modalBackdrop.style.display = "none";
       modalBackdrop.setAttribute("aria-hidden","true");
       draftMeta = null;
     }
-
     function rebuildRoutesModalPicklist(){
       const routes = Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b));
       routePick.innerHTML = "";
       routes.forEach(r => routePick.appendChild(new Option(r, r)));
       if (routes.length) routePick.value = routes[0];
     }
-
     function ensureDraft(){
       if (!draftMeta) draftMeta = JSON.parse(JSON.stringify(routeMeta || {}));
     }
-
     function loadRouteIntoEditor(routeName){
       ensureDraft();
       if (!routeName || !draftMeta[routeName]) return;
 
-      // Days checkboxes
       daysChecks.innerHTML = "";
       const currentDays = new Set(String(draftMeta[routeName].days || "Monday").split("|").map(s=>s.trim()).filter(Boolean));
-
       ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].forEach(day => {
         const id = `d_${routeName}_${day}`.replace(/\W+/g,"_");
         const lab = document.createElement("label");
@@ -675,7 +750,6 @@
             if (c && c.checked) picked.push(d);
           });
           if (!picked.length) {
-            // force at least one
             const mid = `d_${routeName}_Monday`.replace(/\W+/g,"_");
             const m = document.getElementById(mid);
             if (m) m.checked = true;
@@ -686,11 +760,9 @@
         daysChecks.appendChild(lab);
       });
 
-      // Scope
       scopeChannels.innerHTML = "";
       const scope = draftMeta[routeName].channels ?? "ALL";
       const isAll = (scope === "ALL");
-
       scopeAllChk.checked = isAll;
 
       channels.forEach(ch => {
@@ -699,9 +771,8 @@
         lab.innerHTML = `<input type="checkbox" id="${id}"> ${ch}`;
         const chk = lab.querySelector("input");
         chk.disabled = isAll;
-
         if (!isAll && Array.isArray(scope)) chk.checked = scope.includes(ch);
-        else chk.checked = false;
+        scopeChannels.appendChild(lab);
 
         chk.addEventListener("change", () => {
           if (scopeAllChk.checked) return;
@@ -716,15 +787,12 @@
             loadRouteIntoEditor(routeName);
           }
         });
-
-        scopeChannels.appendChild(lab);
       });
 
       scopeAllChk.onchange = () => {
         if (scopeAllChk.checked) {
           draftMeta[routeName].channels = "ALL";
         } else {
-          // default to first channel if any
           draftMeta[routeName].channels = channels.length ? [channels[0]] : "ALL";
         }
         loadRouteIntoEditor(routeName);
@@ -732,6 +800,8 @@
     }
 
     routePick.addEventListener("change", () => loadRouteIntoEditor(routePick.value));
+    routesManagerBtn.addEventListener("click", openModal);
+    closeModalBtn.addEventListener("click", closeModal);
 
     addRouteBtn.addEventListener("click", () => {
       ensureDraft();
@@ -739,15 +809,11 @@
       if (!name) { alert("Enter a route name."); return; }
       if (draftMeta[name] || routeMeta[name]) { alert("That route already exists."); return; }
       draftMeta[name] = { days: "Monday", channels: "ALL" };
-
-      // Apply into live list immediately for selection (still not saved until Save)
       routeMeta[name] = { days: "Monday", channels: "ALL" };
-      rebuildRouteDropdowns();
-      rebuildRoutesModalPicklist();
-      routePick.value = name;
-      loadRouteIntoEditor(name);
       newRouteName.value = "";
-      setStatus(`Route "${name}" added (staged). Click Save route changes to commit.`);
+      // refresh dropdowns
+      loadMeta().catch(()=>{});
+      setStatus(`Route "${name}" added (staged). Open Routes and Save to commit.`);
     });
 
     deleteRouteBtn.addEventListener("click", async () => {
@@ -763,23 +829,14 @@
         setStatus(res && res.error ? res.error : "Delete failed", true);
         return;
       }
-
-      // refresh meta from response if provided
       if (res.meta) routeMeta = res.meta;
-      rebuildRouteDropdowns();
-      rebuildRoutesModalPicklist();
+      await loadMeta();
       setStatus(`Route "${name}" deleted. Corrected day cells: ${res.correctedDays || 0}.`);
-      loadRouteIntoEditor(routePick.value);
-      await safeRefreshAfterRouteChange();
     });
 
     discardRouteBtn.addEventListener("click", async () => {
       if (!confirm("Discard unsaved route edits?")) return;
       await loadMeta();
-      if (modalBackdrop.style.display === "flex") {
-        rebuildRoutesModalPicklist();
-        loadRouteIntoEditor(routePick.value);
-      }
       setStatus("Discarded route edits (reloaded meta).");
     });
 
@@ -789,14 +846,7 @@
       if (!name || !draftMeta[name]) { alert("Select a route."); return; }
 
       const u = draftMeta[name];
-      const payloadObj = {
-        routeUpdates: [{
-          op: "upsert",
-          route: name,
-          days: u.days,
-          channels: u.channels
-        }]
-      };
+      const payloadObj = { routeUpdates: [{ op:"upsert", route:name, days:u.days, channels:u.channels }] };
 
       setStatus("Saving route changes…");
       const payload = encodeURIComponent(JSON.stringify(payloadObj));
@@ -808,37 +858,47 @@
       }
 
       if (res.meta) routeMeta = res.meta;
-      rebuildRouteDropdowns();
+      await loadMeta();
       setStatus(`Route saved. Corrected day cells: ${res.correctedDays || 0}.`);
       closeModal();
-      await safeRefreshAfterRouteChange();
+      // keep current results on screen; user can re-search if they want
     });
 
-    async function safeRefreshAfterRouteChange(){
-      // refresh current page results if user has searched already
-      try {
-        if (pager.style.display === "flex") await runSearch(offset);
-      } catch (e) {
-        // ignore
+    function syncModeUI(){
+      const mode = getSelectedMode();
+      setModePill(mode || "");
+
+      if (mode === "channel") {
+        searchRoute.disabled = true;
+        rangeFrom.disabled = true;
+        rangeTo.disabled = true;
+        searchChannel.disabled = false;
+      } else if (mode === "route") {
+        searchChannel.disabled = true;
+        rangeFrom.disabled = true;
+        rangeTo.disabled = true;
+        searchRoute.disabled = false;
+      } else if (mode === "range") {
+        searchChannel.disabled = true;
+        searchRoute.disabled = true;
+        rangeFrom.disabled = false;
+        rangeTo.disabled = false;
+      } else {
+        searchChannel.disabled = false;
+        searchRoute.disabled = false;
+        rangeFrom.disabled = false;
+        rangeTo.disabled = false;
       }
     }
 
-    routesManagerBtn.addEventListener("click", openModal);
-    closeModalBtn.addEventListener("click", closeModal);
-
-    /************* TOP BUTTONS *************/
-    document.getElementById("searchBtn").addEventListener("click", () => runSearch(0));
-    document.getElementById("reloadMetaBtn").addEventListener("click", async () => {
-      try { await loadMeta(); setStatus("Meta reloaded."); }
-      catch (e) { console.error(e); setStatus(String(e.message||e), true); }
-    });
-    document.getElementById("applyToSelectedBtn").addEventListener("click", applyToSelected);
-    saveEditsBtn.addEventListener("click", saveEdits);
-
-    /************* INIT *************/
     (async function init(){
-      try { await loadMeta(); }
-      catch (e) { console.error(e); setStatus("Failed to load meta. Check Apps Script deployment.", true); }
+      try {
+        await loadMeta();
+        setModePill("");
+      } catch (e) {
+        console.error(e);
+        setStatus("Failed to load meta. Check Apps Script deployment.", true);
+      }
     })();
   </script>
 </body>
