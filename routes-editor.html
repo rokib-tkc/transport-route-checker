@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Routes Editor (Google Sheet)</title>
+  <title>Routes Editor (Search-first)</title>
   <style>
     * { box-sizing:border-box; font-family: Arial, sans-serif; }
     body { margin:0; padding:18px; background:#f5f5f5; color:#222; }
@@ -25,11 +25,10 @@
     button:disabled { background:#9bbbd7; cursor:not-allowed; }
     .mini-btn { background:#444 !important; padding:7px 10px !important; }
     .mini-btn:hover { background:#333 !important; }
-    .danger { background:#b00020 !important; }
-    .danger:hover { background:#8b001a !important; }
     .muted { font-size:12px; color:#666; }
     .status { font-size:12px; padding:8px 10px; border-radius:6px; background:#f0f7ff; border:1px solid #d6eaff; }
     .status.bad { background:#ffecec; border-color:#ffd0d0; color:#900; }
+    .toolbar-right { margin-left:auto; display:flex; gap:10px; align-items:center; }
 
     table { width:100%; border-collapse:collapse; margin-top:10px; table-layout: fixed; background:#fff; }
     th, td { border:1px solid #e2e2e2; padding:7px 8px; font-size:13px; text-align:left; vertical-align:top; }
@@ -42,163 +41,93 @@
     .col-lead { width:120px; }
     .col-days { width:220px; }
 
-    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 11px; background:#f2f2f2; border:1px solid #ddd; border-bottom-width:2px; padding:1px 5px; border-radius:5px; }
-
-    .toolbar-right { margin-left:auto; display:flex; gap:10px; align-items:center; }
-
-    .radio-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
-    .radio-row label { font-weight:normal; font-size:12px; margin:0; display:flex; align-items:center; gap:6px; }
-    .radio-row input { margin:0; }
-
-    .preview {
-      margin-left:auto;
-      display:flex;
-      align-items:center;
-      gap:10px;
-      padding:8px 10px;
-      border:1px solid #e6e6e6;
-      border-radius:10px;
-      background:#fff;
-      min-height:40px;
-    }
-    .preview strong { font-size:12px; }
-    .preview .count { font-size:16px; font-weight:700; }
-    .preview .smalltxt { font-size:12px; color:#666; }
-    .preview.bad { border-color:#ffd0d0; background:#fff6f6; }
-
-    /* Modal */
-    .modal-backdrop {
-      position:fixed; inset:0;
-      background: rgba(0,0,0,.35);
-      display:none;
-      align-items:center;
-      justify-content:center;
-      padding: 18px;
-      z-index: 999;
-    }
-    .modal {
-      width: min(920px, 100%);
-      background:#fff;
-      border-radius: 12px;
-      box-shadow: 0 12px 40px rgba(0,0,0,.25);
-      overflow:hidden;
-      border:1px solid #e6e6e6;
-    }
-    .modal header {
-      padding: 12px 14px;
-      background:#f7f7f7;
-      border-bottom:1px solid #e6e6e6;
-      display:flex;
-      align-items:center;
-      gap:10px;
-    }
-    .modal header h2 { margin:0; font-size:16px; }
-    .modal .content { padding: 14px; }
-    .modal .footer { padding: 12px 14px; border-top:1px solid #e6e6e6; display:flex; gap:10px; justify-content:flex-end; }
-    .route-list { max-height: 360px; overflow:auto; border:1px solid #e6e6e6; border-radius:10px; background:#fff; }
-    .route-item { padding:10px; border-bottom:1px solid #eee; display:grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap:10px; align-items:start; }
-    .route-item:last-child { border-bottom:0; }
-    .route-name { font-weight:bold; font-size:13px; }
-    .chkgrid { display:flex; flex-wrap:wrap; gap:8px; }
-    .chkgrid label { font-weight:normal; font-size:12px; margin:0; display:flex; align-items:center; gap:6px; }
-    .route-meta { font-size:12px; color:#666; }
-    .route-actions { display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
-    .route-actions button { padding:7px 10px; font-size:12px; }
-    .input-full { width:100% !important; }
+    .pager { display:flex; gap:10px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+    .pager .box { background:#fafafa; border:1px solid #e6e6e6; border-radius:10px; padding:10px; }
+    .pager .num { font-weight:700; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>
-      Routes Editor
-      <span class="pill">Google Sheet (locked rules)</span>
-    </h1>
+    <h1>Routes Editor <span class="pill">Search-first (fast)</span></h1>
 
     <div class="row">
-      <div class="status" id="statusBox">Ready.</div>
+      <div class="status" id="statusBox">Loading meta…</div>
       <div class="toolbar-right">
-        <button id="manageRoutesBtn" class="mini-btn">Manage routes (days + scope)</button>
-        <button id="reloadBtn">Reload</button>
-        <button id="saveBtn" disabled>Save to Google Sheet</button>
+        <button id="reloadMetaBtn">Reload meta</button>
+        <button id="saveSelectedBtn" disabled>Save selected edits</button>
       </div>
     </div>
 
     <div class="group">
-      <div class="row" style="align-items:flex-start;">
+      <div class="row">
         <div style="min-width:260px;">
-          <div class="muted"><strong>Filtering</strong></div>
-          <div class="muted">Prefix + channel are locked. Days are route-defined.</div>
-          <div class="muted" style="margin-top:6px;">
-            Tip: bulk update works on <span class="kbd">ticked</span>, <span class="kbd">filtered</span>, or <span class="kbd">prefix range</span>.
-          </div>
+          <div class="muted"><strong>How it works</strong></div>
+          <div class="muted">No rows are loaded until you search. Bulk updates run server-side (no 11k table).</div>
         </div>
 
         <div>
-          <label>Filter: prefix contains</label>
-          <input id="filterPrefix" type="text" placeholder="e.g. AB1" class="small"/>
-        </div>
-
-        <div>
-          <label>Filter: route contains</label>
-          <input id="filterRoute" type="text" placeholder="e.g. TKC01" class="wide"/>
-        </div>
-
-        <div style="min-width:420px;">
-          <label>Filter: channel</label>
-          <div class="radio-row" id="channelRadios"></div>
-        </div>
-
-        <div>
-          <button id="applyFiltersBtn">Apply filters</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="group" style="margin-top:12px;">
-      <div class="row" style="align-items:flex-start;">
-        <div style="min-width:280px;">
-          <div class="muted"><strong>Bulk target</strong></div>
-          <div class="muted">Choose which rows to update.</div>
-        </div>
-
-        <div>
-          <label>Mode</label>
-          <select id="bulkTargetMode">
-            <option value="selected">Apply to ticked rows</option>
-            <option value="filtered">Apply to filtered results</option>
-            <option value="range">Apply to prefix range</option>
+          <label>Channel</label>
+          <select id="filterChannel" class="wide">
+            <option value="ALL">ALL</option>
           </select>
         </div>
 
         <div>
-          <label>From prefix</label>
-          <input id="rangeFrom" type="text" placeholder="e.g. AB10 or AB" class="small"/>
+          <label>Prefix contains</label>
+          <input id="filterPrefix" type="text" placeholder="e.g. AB1" class="small"/>
         </div>
 
         <div>
-          <label>To prefix</label>
-          <input id="rangeTo" type="text" placeholder="e.g. AB14 or AC" class="small"/>
+          <label>Route contains</label>
+          <input id="filterRoute" type="text" placeholder="e.g. TKC01" class="wide"/>
         </div>
 
-        <div class="preview" id="previewBox">
-          <div>
-            <strong>Bulk preview</strong><br>
-            <span class="smalltxt" id="previewModeText">Mode: ticked rows</span>
-          </div>
-          <div style="text-align:right;">
-            <div class="count" id="previewCount">0</div>
-            <div class="smalltxt" id="previewDetail">rows matched</div>
-          </div>
-          <button class="mini-btn" id="previewRefreshBtn" type="button">Refresh</button>
+        <div>
+          <label>Page size</label>
+          <select id="pageSize">
+            <option>200</option>
+            <option selected>500</option>
+            <option>1000</option>
+            <option>2000</option>
+          </select>
+        </div>
+
+        <div>
+          <button id="searchBtn">Search</button>
         </div>
       </div>
 
-      <hr style="border:0; border-top:1px solid #e8e8e8; margin:10px 0;"/>
+      <div class="row" style="align-items:flex-end;">
+        <div>
+          <label>Prefix range (optional)</label>
+          <div class="muted">Use for range searches or range bulk update.</div>
+        </div>
+        <div>
+          <label>From</label>
+          <input id="rangeFrom" type="text" class="small" placeholder="e.g. AB10 or AB"/>
+        </div>
+        <div>
+          <label>To</label>
+          <input id="rangeTo" type="text" class="small" placeholder="e.g. AB14 or AC"/>
+        </div>
+        <div class="muted">Leave blank to ignore range.</div>
+      </div>
+    </div>
 
-      <div class="row">
-        <div style="min-width:200px;">
-          <div class="muted"><strong>Bulk update fields</strong></div>
-          <div class="muted">Leave blank = no change</div>
+    <div class="group" style="margin-top:12px;">
+      <div class="row" style="align-items:flex-end;">
+        <div style="min-width:240px;">
+          <div class="muted"><strong>Bulk update (server-side)</strong></div>
+          <div class="muted">Applies without loading every matching row.</div>
+        </div>
+
+        <div>
+          <label>Bulk mode</label>
+          <select id="bulkMode">
+            <option value="filtered">Filtered results (entire match)</option>
+            <option value="range">Prefix range (entire match)</option>
+            <option value="selected">Ticked rows (this page)</option>
+          </select>
         </div>
 
         <div>
@@ -206,7 +135,6 @@
           <select id="bulkRoute" class="wide">
             <option value="">(no change)</option>
           </select>
-          <div class="muted" style="margin-top:4px;">Routes are filtered by channel scope.</div>
         </div>
 
         <div>
@@ -220,23 +148,15 @@
 
         <div>
           <label>Lead Time</label>
-          <input id="bulkLeadTime" type="text" placeholder="e.g. 5 Days" class="small"/>
+          <input id="bulkLeadTime" type="text" class="small" placeholder="e.g. 5 Days"/>
         </div>
 
         <div>
-          <button id="applyBulkBtn">Apply bulk update</button>
+          <button id="runBulkBtn">Run bulk update</button>
         </div>
 
         <div class="muted" style="flex-basis:100%;">
-          Note: <strong>Delivery Days cannot be bulk edited here</strong>. Change them via <span class="kbd">Manage routes</span>.
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="muted">
-          <strong>Selection:</strong>
-          <button id="tickAllVisibleBtn" class="mini-btn">Tick all visible</button>
-          <button id="untickAllVisibleBtn" class="mini-btn" style="background:#666 !important;">Untick all visible</button>
+          Delivery days remain route-defined and are updated automatically by the API.
         </div>
       </div>
     </div>
@@ -251,62 +171,34 @@
             <th class="col-route">Route</th>
             <th class="col-service">Delivery Type</th>
             <th class="col-lead">Lead Time</th>
-            <th class="col-days">Days (route-defined)</th>
+            <th class="col-days">Days</th>
           </tr>
         </thead>
-        <tbody id="tbody"></tbody>
+        <tbody id="tbody">
+          <tr><td colspan="7" class="muted" style="padding:12px;">Search to load rows.</td></tr>
+        </tbody>
       </table>
     </div>
 
-    <div class="muted" style="margin-top:10px;">
-      <strong>Locked rules:</strong> No adding/deleting rows. Prefix + Channel are keys. Days come from the route definition.
+    <div class="pager" id="pager" style="display:none;">
+      <div class="box">
+        Results: <span class="num" id="totalCount">0</span>
+      </div>
+      <button class="mini-btn" id="prevBtn">Prev</button>
+      <button class="mini-btn" id="nextBtn">Next</button>
+      <div class="box">
+        Page offset: <span class="num" id="offsetTxt">0</span>
+      </div>
     </div>
-  </div>
 
-  <!-- Manage Routes Modal -->
-  <div class="modal-backdrop" id="modalBackdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true">
-      <header>
-        <h2>Manage routes</h2>
-        <span class="pill">days + channel scope</span>
-        <div class="toolbar-right" style="margin-left:auto;">
-          <button id="closeModalBtn" class="mini-btn">Close</button>
-        </div>
-      </header>
-      <div class="content">
-        <div class="row">
-          <div style="flex:1; min-width:280px;">
-            <label>Add new route</label>
-            <input id="newRouteName" type="text" placeholder="e.g. TKC01 Aberdeen O/N" class="input-full"/>
-            <div class="muted" style="margin-top:4px;">After adding, set its days + scope. It will become selectable in the table.</div>
-          </div>
-          <div>
-            <button id="addRouteBtn">Add route</button>
-          </div>
-        </div>
-
-        <div class="muted" style="margin:10px 0;">
-          Changing a route’s days will update <strong>every row</strong> that uses that route in the Sheet.
-        </div>
-
-        <div class="route-list" id="routeList"></div>
-      </div>
-      <div class="footer">
-        <button id="discardRouteChangesBtn" class="mini-btn" style="background:#666 !important;">Discard changes</button>
-        <button id="applyRouteChangesBtn">Apply route changes</button>
-      </div>
+    <div class="muted" style="margin-top:10px;">
+      Prefix + Channel are locked. Days are route-defined. No add/delete rows.
     </div>
   </div>
 
   <script>
-    /**************************************************************
-     * CONFIG
-     **************************************************************/
-    const API_BASE = "https://script.google.com/macros/s/AKfycby2UaJDmzrkxCm27BA4rH3Fo5xHaHk9lWENv7NvxJWHa0L-P2T_SVJPkMagdNX3QDNvLw/exec"; 
+    const API_BASE = "https://script.google.com/macros/s/AKfycby2UaJDmzrkxCm27BA4rH3Fo5xHaHk9lWENv7NvxJWHa0L-P2T_SVJPkMagdNX3QDNvLw/exec";
 
-    /**************************************************************
-     * JSONP helper
-     **************************************************************/
     function jsonp(url) {
       return new Promise((resolve, reject) => {
         const cbName = "cb_" + Math.random().toString(36).slice(2);
@@ -314,755 +206,341 @@
         const sep = url.includes("?") ? "&" : "?";
         const full = url + sep + "callback=" + encodeURIComponent(cbName);
 
-        window[cbName] = (data) => {
-          cleanup();
-          resolve(data);
-        };
+        window[cbName] = (data) => { cleanup(); resolve(data); };
+        script.onerror = () => { cleanup(); reject(new Error("Network error (JSONP)")); };
 
-        script.onerror = () => {
-          cleanup();
-          reject(new Error("Network error (JSONP)"));
-        };
-
-        function cleanup() {
-          delete window[cbName];
-          script.remove();
-        }
-
+        function cleanup() { delete window[cbName]; script.remove(); }
         script.src = full;
         document.body.appendChild(script);
       });
     }
 
-    /**************************************************************
-     * State
-     **************************************************************/
-    let allRows = [];               // [{prefix, channel, route, serviceType, leadTime, days}]
-    let view = [];                  // [{row, idx}]
-    let channels = [];
-    let selectedChannel = "ALL";
-    let routeMeta = {};             // { routeName: {days, channels:'ALL'|[...]} }
-    let version = "";
-    let dirtyRows = new Map();      // key prefix||channel -> updated row object
-    let dirtyRouteUpdates = new Map(); // route -> {op, route, days, channels}
-
     const statusBox = document.getElementById("statusBox");
-    const saveBtn = document.getElementById("saveBtn");
-    const reloadBtn = document.getElementById("reloadBtn");
-
-    function setStatus(msg, bad=false) {
+    function setStatus(msg, bad=false){
       statusBox.textContent = msg;
       statusBox.classList.toggle("bad", !!bad);
     }
 
-    function markDirty() {
-      saveBtn.disabled = (dirtyRows.size === 0 && dirtyRouteUpdates.size === 0);
-    }
+    // Meta
+    let channels = [];
+    let routeMeta = {};
+    let metaVersion = "";
 
-    /**************************************************************
-     * Load
-     **************************************************************/
-    async function loadFromSheet() {
-      setStatus("Loading from Google Sheet…");
-      saveBtn.disabled = true;
-      dirtyRows.clear();
-      dirtyRouteUpdates.clear();
+    // Current page data
+    let rows = [];
+    let total = 0;
+    let offset = 0;
 
-      const res = await jsonp(`${API_BASE}?action=read&cb=${Date.now()}`);
-      if (!res || !res.ok) throw new Error(res && res.error ? res.error : "Failed to load");
+    // Edits on current page only (selected save)
+    const dirty = new Map(); // key prefix||channel -> {prefix,channel,route,serviceType,leadTime}
 
-      version = res.version;
-      channels = res.channels || [];
-      routeMeta = res.routeMeta || {};
-      allRows = res.rows || [];
-
-      buildChannelRadios();
-      rebuildRouteDropdowns();
-      render();
-      updatePreview();
-      setStatus(`Loaded ${allRows.length.toLocaleString()} rows from Sheet.`);
-    }
-
-    /**************************************************************
-     * Filters
-     **************************************************************/
+    const filterChannel = document.getElementById("filterChannel");
     const filterPrefix = document.getElementById("filterPrefix");
     const filterRoute = document.getElementById("filterRoute");
-    const applyFiltersBtn = document.getElementById("applyFiltersBtn");
-
-    function passesFilters(r) {
-      const fp = filterPrefix.value.trim().toUpperCase();
-      const fr = filterRoute.value.trim().toLowerCase();
-
-      if (selectedChannel !== "ALL" && r.channel !== selectedChannel) return false;
-      if (fp && !r.prefix.includes(fp)) return false;
-      if (fr && !String(r.route||"").toLowerCase().includes(fr)) return false;
-      return true;
-    }
-
-    function sortByPrefixThenChannel(a,b) {
-      if (a.prefix !== b.prefix) return a.prefix.localeCompare(b.prefix);
-      return a.channel.localeCompare(b.channel);
-    }
-
-    /**************************************************************
-     * Table rendering
-     **************************************************************/
-    const tbody = document.getElementById("tbody");
-    const masterCheck = document.getElementById("masterCheck");
-
-    function render() {
-      view = allRows
-        .map((row, idx) => ({ row, idx }))
-        .filter(x => passesFilters(x.row))
-        .sort((x,y) => sortByPrefixThenChannel(x.row, y.row));
-
-      tbody.innerHTML = "";
-
-      for (const item of view) {
-        const r = item.row;
-        const tr = document.createElement("tr");
-
-        // checkbox
-        const tdC = document.createElement("td");
-        tdC.className = "col-check";
-        tdC.innerHTML = `<input type="checkbox" class="rowCheck" data-idx="${item.idx}">`;
-        tr.appendChild(tdC);
-
-        // prefix (locked)
-        tr.appendChild(makeTextCell(r.prefix, "col-prefix"));
-
-        // channel (locked)
-        tr.appendChild(makeTextCell(r.channel, "col-channel"));
-
-        // route (controlled select)
-        tr.appendChild(makeRouteSelectCell(item.idx, r));
-
-        // serviceType select
-        tr.appendChild(makeServiceTypeCell(item.idx, r));
-
-        // lead time input
-        tr.appendChild(makeLeadTimeCell(item.idx, r));
-
-        // days (read-only, derived)
-        tr.appendChild(makeTextCell(r.days, "col-days"));
-
-        tbody.appendChild(tr);
-      }
-
-      masterCheck.checked = false;
-      setStatus(`Showing ${view.length.toLocaleString()} of ${allRows.length.toLocaleString()} rows.`);
-    }
-
-    function makeTextCell(text, className) {
-      const td = document.createElement("td");
-      td.className = className;
-      td.textContent = (text ?? "");
-      return td;
-    }
-
-    function routeAllowedForChannel(routeName, channel) {
-      const meta = routeMeta[routeName];
-      if (!meta) return true; // if unknown, allow (API will bootstrap)
-      if (meta.channels === "ALL") return true;
-      const arr = Array.isArray(meta.channels) ? meta.channels : [];
-      return arr.includes(channel);
-    }
-
-    function getRouteOptionsForChannel(channel) {
-      const routes = Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b));
-      return routes.filter(r => routeAllowedForChannel(r, channel));
-    }
-
-    function makeRouteSelectCell(idx, row) {
-      const td = document.createElement("td");
-      td.className = "col-route";
-
-      const sel = document.createElement("select");
-      sel.style.width = "100%";
-
-      const opts = getRouteOptionsForChannel(row.channel);
-      // Ensure current route is shown even if scope changed (so you can see it)
-      const routesFinal = Array.from(new Set([row.route, ...opts].filter(Boolean)));
-
-      sel.appendChild(new Option("(select route)", ""));
-      routesFinal.forEach(rn => sel.appendChild(new Option(rn, rn)));
-      sel.value = row.route || "";
-
-      sel.addEventListener("change", () => {
-        const newRoute = sel.value;
-        // Update row route
-        const updated = { ...row, route: newRoute };
-        // days shown in UI will update after save; but we also want UI immediate:
-        if (newRoute && routeMeta[newRoute] && routeMeta[newRoute].days) {
-          updated.days = routeMeta[newRoute].days;
-        }
-        allRows[idx] = updated;
-        dirtyRows.set(`${updated.prefix}||${updated.channel}`, updated);
-        markDirty();
-        render(); // re-render to refresh days cell
-        updatePreview();
-      });
-
-      td.appendChild(sel);
-      return td;
-    }
-
-    function makeServiceTypeCell(idx, row) {
-      const td = document.createElement("td");
-      td.className = "col-service";
-
-      const sel = document.createElement("select");
-      sel.style.width = "100%";
-      ["","One-person","Two-person"].forEach(v => sel.appendChild(new Option(v || "(blank)", v)));
-      sel.value = row.serviceType || "";
-
-      sel.addEventListener("change", () => {
-        const updated = { ...row, serviceType: sel.value };
-        allRows[idx] = updated;
-        dirtyRows.set(`${updated.prefix}||${updated.channel}`, updated);
-        markDirty();
-      });
-
-      td.appendChild(sel);
-      return td;
-    }
-
-    function makeLeadTimeCell(idx, row) {
-      const td = document.createElement("td");
-      td.className = "col-lead";
-
-      const inp = document.createElement("input");
-      inp.type = "text";
-      inp.value = row.leadTime || "";
-      inp.style.width = "100%";
-
-      inp.addEventListener("blur", () => {
-        const v = inp.value.trim();
-        if (v === (row.leadTime || "")) return;
-        const updated = { ...row, leadTime: v };
-        allRows[idx] = updated;
-        dirtyRows.set(`${updated.prefix}||${updated.channel}`, updated);
-        markDirty();
-      });
-
-      td.appendChild(inp);
-      return td;
-    }
-
-    /**************************************************************
-     * Channel radios
-     **************************************************************/
-    const channelRadios = document.getElementById("channelRadios");
-    function buildChannelRadios() {
-      channelRadios.innerHTML = "";
-      const list = ["ALL", ...channels];
-
-      list.forEach(ch => {
-        const id = "ch_" + ch.replace(/\W+/g,"_");
-        const wrap = document.createElement("label");
-        wrap.htmlFor = id;
-        wrap.innerHTML = `<input type="radio" name="channelFilter" id="${id}" value="${ch}"> ${ch}`;
-        channelRadios.appendChild(wrap);
-      });
-
-      // default
-      selectedChannel = "ALL";
-      channelRadios.querySelector(`input[value="ALL"]`).checked = true;
-
-      channelRadios.addEventListener("change", (e) => {
-        if (e.target && e.target.name === "channelFilter") {
-          selectedChannel = e.target.value;
-          rebuildRouteDropdowns();
-          render();
-          updatePreview();
-        }
-      });
-    }
-
-    /**************************************************************
-     * Bulk logic
-     **************************************************************/
-    const bulkTargetMode = document.getElementById("bulkTargetMode");
     const rangeFrom = document.getElementById("rangeFrom");
     const rangeTo = document.getElementById("rangeTo");
+    const pageSize = document.getElementById("pageSize");
 
+    const tbody = document.getElementById("tbody");
+    const pager = document.getElementById("pager");
+    const totalCount = document.getElementById("totalCount");
+    const offsetTxt = document.getElementById("offsetTxt");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+
+    const saveSelectedBtn = document.getElementById("saveSelectedBtn");
+
+    const bulkMode = document.getElementById("bulkMode");
     const bulkRoute = document.getElementById("bulkRoute");
     const bulkServiceType = document.getElementById("bulkServiceType");
     const bulkLeadTime = document.getElementById("bulkLeadTime");
 
-    function normalisePrefix(v) {
-      return String(v || "").toUpperCase().replace(/\s+/g,"").trim();
+    const masterCheck = document.getElementById("masterCheck");
+
+    function markDirty(){
+      saveSelectedBtn.disabled = (dirty.size === 0);
     }
 
-    function splitPrefix(p) {
-      const s = normalisePrefix(p);
-      const m = s.match(/^([A-Z]+)(\d+)?$/);
-      if (!m) return { letters: s, num: null, raw: s };
-      return { letters: m[1], num: m[2] ? parseInt(m[2], 10) : null, raw: s };
-    }
-
-    function cmpLetters(a,b){ return String(a||"").localeCompare(String(b||"")); }
-
-    function prefixInRange(prefix, fromP, toP) {
-      const p = splitPrefix(prefix);
-      const a = splitPrefix(fromP);
-      const b = splitPrefix(toP);
-      if (!p.letters || !a.letters || !b.letters) return false;
-
-      let from = a, to = b;
-      const lc = cmpLetters(from.letters, to.letters);
-      if (lc > 0) { from = b; to = a; }
-      else if (lc === 0) {
-        const fromNum = from.num ?? -Infinity;
-        const toNum = to.num ?? Infinity;
-        if (fromNum > toNum) { const t = from; from = to; to = t; }
-      }
-
-      const lettersOK = cmpLetters(p.letters, from.letters) >= 0 && cmpLetters(p.letters, to.letters) <= 0;
-      if (!lettersOK) return false;
-
-      if (p.letters !== from.letters && p.letters !== to.letters) return true;
-
-      const pNum = (p.num === null) ? 0 : p.num;
-
-      if (p.letters === from.letters && from.num !== null) {
-        if (pNum < from.num) return false;
-      }
-      if (p.letters === to.letters && to.num !== null) {
-        if (pNum > to.num) return false;
-      }
-      return true;
-    }
-
-    function getCheckedIndexes() {
-      return Array.from(document.querySelectorAll(".rowCheck:checked"))
-        .map(cb => Number(cb.dataset.idx))
-        .filter(n => Number.isFinite(n));
-    }
-
-    function getBulkTargets() {
-      const mode = bulkTargetMode.value;
-      if (mode === "selected") return getCheckedIndexes();
-      if (mode === "filtered") return view.map(v => v.idx);
-      if (mode === "range") {
-        const fromP = rangeFrom.value.trim();
-        const toP = rangeTo.value.trim();
-        if (!fromP || !toP) return [];
-        const fromN = normalisePrefix(fromP);
-        const toN = normalisePrefix(toP);
-
-        const ok = /^[A-Z]+(\d+)?$/.test(fromN) && /^[A-Z]+(\d+)?$/.test(toN);
-        if (!ok) return [];
-
-        const targets = [];
-        for (let i=0;i<allRows.length;i++) {
-          const r = allRows[i];
-          if (selectedChannel !== "ALL" && r.channel !== selectedChannel) continue;
-          if (prefixInRange(r.prefix, fromN, toN)) targets.push(i);
-        }
-        return targets;
-      }
-      return [];
-    }
-
-    function rebuildRouteDropdowns() {
-      // Bulk dropdown routes should respect selectedChannel (if not ALL), otherwise show all
+    function rebuildRouteDropdown(){
       bulkRoute.innerHTML = "";
       bulkRoute.appendChild(new Option("(no change)", ""));
-
-      let routeNames = Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b));
-
-      if (selectedChannel !== "ALL") {
-        routeNames = routeNames.filter(r => routeAllowedForChannel(r, selectedChannel));
-      }
-
-      routeNames.forEach(rn => bulkRoute.appendChild(new Option(rn, rn)));
+      Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b)).forEach(r => {
+        bulkRoute.appendChild(new Option(r, r));
+      });
     }
 
-    function applyBulkUpdate() {
-      const targets = getBulkTargets();
-      if (!targets.length) { alert("No target rows found."); return; }
+    async function loadMeta(){
+      setStatus("Loading meta (channels/routes)...");
+      const res = await jsonp(`${API_BASE}?action=meta&cb=${Date.now()}`);
+      if (!res || !res.ok) throw new Error(res && res.error ? res.error : "Meta load failed");
 
-      const routeVal = bulkRoute.value;
-      const serviceVal = bulkServiceType.value;
-      const leadVal = bulkLeadTime.value.trim();
+      channels = res.channels || [];
+      routeMeta = res.routeMeta || {};
+      metaVersion = res.version || "";
 
-      if (!routeVal && !serviceVal && !leadVal) {
-        alert("No bulk fields entered (nothing to change).");
+      filterChannel.innerHTML = `<option value="ALL">ALL</option>`;
+      channels.forEach(ch => filterChannel.appendChild(new Option(ch, ch)));
+
+      rebuildRouteDropdown();
+      setStatus("Meta loaded. Enter filters and click Search.");
+    }
+
+    function currentSearchParams(){
+      return {
+        channel: filterChannel.value || "ALL",
+        prefixContains: filterPrefix.value.trim(),
+        routeContains: filterRoute.value.trim(),
+        rangeFrom: rangeFrom.value.trim(),
+        rangeTo: rangeTo.value.trim(),
+        limit: parseInt(pageSize.value, 10) || 500
+      };
+    }
+
+    async function runSearch(newOffset=0){
+      const p = currentSearchParams();
+      offset = Math.max(0, newOffset);
+
+      // Require at least one filter (prevents accidental full-table pulls)
+      const hasAny =
+        (p.channel && p.channel !== "ALL") ||
+        !!p.prefixContains ||
+        !!p.routeContains ||
+        (!!p.rangeFrom && !!p.rangeTo);
+
+      if (!hasAny) {
+        alert("Enter at least one filter (Channel / Prefix / Route / Range) before searching.");
         return;
       }
 
-      targets.forEach(idx => {
-        const row = allRows[idx];
-        const updated = { ...row };
+      setStatus("Searching...");
+      dirty.clear();
+      markDirty();
+      masterCheck.checked = false;
 
-        if (routeVal) {
-          // Channel scope enforcement in UI
-          const allowed = (row.channel && routeAllowedForChannel(routeVal, row.channel));
-          if (!allowed) return; // skip silently (or you can count/report)
-          updated.route = routeVal;
-          if (routeMeta[routeVal] && routeMeta[routeVal].days) updated.days = routeMeta[routeVal].days;
-        }
-        if (serviceVal) updated.serviceType = serviceVal;
-        if (leadVal) updated.leadTime = leadVal;
-
-        allRows[idx] = updated;
-        dirtyRows.set(`${updated.prefix}||${updated.channel}`, updated);
+      const qs = new URLSearchParams({
+        action: "search",
+        channel: p.channel,
+        prefixContains: p.prefixContains,
+        routeContains: p.routeContains,
+        rangeFrom: p.rangeFrom,
+        rangeTo: p.rangeTo,
+        offset: String(offset),
+        limit: String(p.limit),
+        cb: String(Date.now())
       });
 
-      markDirty();
-      render();
-      updatePreview();
-      setStatus(`Bulk update applied to ${targets.length.toLocaleString()} rows.`);
+      const res = await jsonp(`${API_BASE}?${qs.toString()}`);
+      if (!res || !res.ok) throw new Error(res && res.error ? res.error : "Search failed");
+
+      rows = res.rows || [];
+      total = res.total || 0;
+
+      renderTable();
+      renderPager();
+      setStatus(`Loaded ${rows.length.toLocaleString()} rows (page) from ${total.toLocaleString()} matches.`);
     }
 
-    document.getElementById("applyBulkBtn").addEventListener("click", applyBulkUpdate);
+    function renderPager(){
+      pager.style.display = "flex";
+      totalCount.textContent = total.toLocaleString();
+      offsetTxt.textContent = offset.toLocaleString();
 
-    /**************************************************************
-     * Preview
-     **************************************************************/
-    const previewBox = document.getElementById("previewBox");
-    const previewModeText = document.getElementById("previewModeText");
-    const previewCount = document.getElementById("previewCount");
-    const previewDetail = document.getElementById("previewDetail");
-    const previewRefreshBtn = document.getElementById("previewRefreshBtn");
+      const limit = parseInt(pageSize.value, 10) || 500;
 
-    function updatePreview() {
-      const mode = bulkTargetMode.value;
-      let targets = [];
-      let detail = "rows matched";
-      let bad = false;
+      prevBtn.disabled = (offset <= 0);
+      nextBtn.disabled = (offset + limit >= total);
+    }
 
-      if (mode === "selected") {
-        targets = getCheckedIndexes();
-        previewModeText.textContent = "Mode: ticked rows";
-        detail = "ticked rows";
-      } else if (mode === "filtered") {
-        targets = view.map(v => v.idx);
-        previewModeText.textContent = "Mode: filtered results";
-        detail = "visible rows";
-      } else if (mode === "range") {
-        previewModeText.textContent = "Mode: prefix range";
-        const fromP = rangeFrom.value.trim();
-        const toP = rangeTo.value.trim();
-        if (!fromP || !toP) { bad = true; detail = "enter From + To"; }
-        else if (!/^[A-Z]+(\d+)?$/i.test(fromP) || !/^[A-Z]+(\d+)?$/i.test(toP)) { bad = true; detail = "invalid range format"; }
-        else targets = getBulkTargets();
+    function renderTable(){
+      tbody.innerHTML = "";
+      if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="muted" style="padding:12px;">No results.</td></tr>`;
+        return;
       }
 
-      previewCount.textContent = targets.length.toLocaleString();
-      previewDetail.textContent = detail;
-      previewBox.classList.toggle("bad", bad);
-    }
+      rows.forEach((r, i) => {
+        const tr = document.createElement("tr");
 
-    previewRefreshBtn.addEventListener("click", updatePreview);
+        const tdC = document.createElement("td");
+        tdC.className = "col-check";
+        tdC.innerHTML = `<input type="checkbox" class="rowCheck" data-i="${i}">`;
+        tr.appendChild(tdC);
 
-    document.addEventListener("change", (e) => {
-      if (e.target && e.target.classList && e.target.classList.contains("rowCheck")) updatePreview();
-    });
+        tr.appendChild(textCell(r.prefix, "col-prefix"));
+        tr.appendChild(textCell(r.channel, "col-channel"));
 
-    bulkTargetMode.addEventListener("change", updatePreview);
-    rangeFrom.addEventListener("input", updatePreview);
-    rangeTo.addEventListener("input", updatePreview);
+        tr.appendChild(routeCell(i, r));
+        tr.appendChild(serviceCell(i, r));
+        tr.appendChild(leadCell(i, r));
 
-    /**************************************************************
-     * Selection helpers
-     **************************************************************/
-    function setAllVisibleChecks(checked) {
-      document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = checked);
-      masterCheck.checked = checked;
-      updatePreview();
-    }
-    masterCheck.addEventListener("change", () => setAllVisibleChecks(masterCheck.checked));
-    document.getElementById("tickAllVisibleBtn").addEventListener("click", () => setAllVisibleChecks(true));
-    document.getElementById("untickAllVisibleBtn").addEventListener("click", () => setAllVisibleChecks(false));
+        tr.appendChild(textCell(r.days, "col-days"));
 
-    /**************************************************************
-     * Manage Routes modal
-     **************************************************************/
-    const modalBackdrop = document.getElementById("modalBackdrop");
-    const manageRoutesBtn = document.getElementById("manageRoutesBtn");
-    const closeModalBtn = document.getElementById("closeModalBtn");
-    const routeList = document.getElementById("routeList");
-    const addRouteBtn = document.getElementById("addRouteBtn");
-    const newRouteName = document.getElementById("newRouteName");
-    const discardRouteChangesBtn = document.getElementById("discardRouteChangesBtn");
-    const applyRouteChangesBtn = document.getElementById("applyRouteChangesBtn");
-
-    let modalDraftMeta = null;
-
-    function openModal() {
-      modalDraftMeta = JSON.parse(JSON.stringify(routeMeta || {}));
-      buildRouteList();
-      modalBackdrop.style.display = "flex";
-      modalBackdrop.setAttribute("aria-hidden", "false");
-    }
-
-    function closeModal() {
-      modalBackdrop.style.display = "none";
-      modalBackdrop.setAttribute("aria-hidden", "true");
-      modalDraftMeta = null;
-    }
-
-    manageRoutesBtn.addEventListener("click", openModal);
-    closeModalBtn.addEventListener("click", closeModal);
-
-    function buildRouteList() {
-      routeList.innerHTML = "";
-
-      const routeNames = Object.keys(modalDraftMeta || {}).sort((a,b)=>a.localeCompare(b));
-      routeNames.forEach(routeName => {
-        const meta = modalDraftMeta[routeName] || { days:"Monday", channels:"ALL" };
-        const usedCount = allRows.filter(r => r.route === routeName).length;
-
-        const item = document.createElement("div");
-        item.className = "route-item";
-
-        // Name
-        const nameBox = document.createElement("div");
-        nameBox.innerHTML = `
-          <div class="route-name">${escapeHtml(routeName)}</div>
-          <div class="route-meta">${usedCount.toLocaleString()} rows currently use this route</div>
-        `;
-
-        // Days
-        const daysBox = document.createElement("div");
-        const daysWrap = document.createElement("div");
-        daysWrap.className = "chkgrid";
-        const daysSet = new Set(String(meta.days || "").split("|").map(s=>s.trim()).filter(Boolean));
-        ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].forEach(d => {
-          const id = `d_${slug(routeName)}_${d}`;
-          const lab = document.createElement("label");
-          lab.innerHTML = `<input type="checkbox" id="${id}" ${daysSet.has(d) ? "checked":""}> ${d.slice(0,3)}`;
-          lab.querySelector("input").addEventListener("change", () => {
-            const chosen = [];
-            ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].forEach(dd => {
-              const chk = document.getElementById(`d_${slug(routeName)}_${dd}`);
-              if (chk && chk.checked) chosen.push(dd);
-            });
-            if (!chosen.length) {
-              // force at least one day
-              document.getElementById(`d_${slug(routeName)}_Monday`).checked = true;
-              chosen.push("Monday");
-            }
-            modalDraftMeta[routeName].days = chosen.join("|");
-          });
-          daysWrap.appendChild(lab);
-        });
-        daysBox.appendChild(daysWrap);
-
-        // Channels scope
-        const scopeBox = document.createElement("div");
-        const scopeWrap = document.createElement("div");
-        scopeWrap.className = "chkgrid";
-
-        const allId = `all_${slug(routeName)}`;
-        const allLab = document.createElement("label");
-        allLab.innerHTML = `<input type="checkbox" id="${allId}"> ALL channels`;
-        scopeWrap.appendChild(allLab);
-
-        const allowed = meta.channels === "ALL" ? null : new Set(Array.isArray(meta.channels) ? meta.channels : []);
-        const channelChecks = [];
-
-        channels.forEach(ch => {
-          const cid = `c_${slug(routeName)}_${slug(ch)}`;
-          const lab = document.createElement("label");
-          lab.innerHTML = `<input type="checkbox" id="${cid}"> ${escapeHtml(ch)}`;
-          scopeWrap.appendChild(lab);
-          channelChecks.push({ ch, id: cid });
-        });
-
-        // init
-        const allChk = allLab.querySelector("input");
-        allChk.checked = (meta.channels === "ALL");
-
-        channelChecks.forEach(({ch,id}) => {
-          const chk = scopeWrap.querySelector(`#${CSS.escape(id)}`);
-          chk.checked = (meta.channels === "ALL") ? false : (allowed && allowed.has(ch));
-          chk.disabled = allChk.checked;
-          chk.addEventListener("change", () => {
-            const picked = channelChecks.filter(x => scopeWrap.querySelector(`#${CSS.escape(x.id)}`).checked).map(x=>x.ch);
-            modalDraftMeta[routeName].channels = picked.length ? picked : "ALL";
-            // if none picked, fallback ALL to avoid a dead route
-            if (modalDraftMeta[routeName].channels === "ALL") {
-              allChk.checked = true;
-              channelChecks.forEach(x => {
-                const c = scopeWrap.querySelector(`#${CSS.escape(x.id)}`);
-                c.checked = false; c.disabled = true;
-              });
-            }
-          });
-        });
-
-        allChk.addEventListener("change", () => {
-          if (allChk.checked) {
-            modalDraftMeta[routeName].channels = "ALL";
-            channelChecks.forEach(x => {
-              const c = scopeWrap.querySelector(`#${CSS.escape(x.id)}`);
-              c.checked = false; c.disabled = true;
-            });
-          } else {
-            // require at least one channel when not ALL
-            channelChecks.forEach(x => scopeWrap.querySelector(`#${CSS.escape(x.id)}`).disabled = false);
-            // Default: pick current selectedChannel if set, else first channel
-            const defaultCh = (selectedChannel !== "ALL") ? selectedChannel : (channels[0] || "");
-            if (defaultCh) {
-              const target = channelChecks.find(x => x.ch === defaultCh);
-              if (target) scopeWrap.querySelector(`#${CSS.escape(target.id)}`).checked = true;
-              modalDraftMeta[routeName].channels = [defaultCh];
-            } else {
-              modalDraftMeta[routeName].channels = "ALL";
-              allChk.checked = true;
-            }
-          }
-        });
-
-        scopeBox.appendChild(scopeWrap);
-
-        // Actions
-        const actions = document.createElement("div");
-        actions.className = "route-actions";
-        const delBtn = document.createElement("button");
-        delBtn.className = "danger";
-        delBtn.textContent = "Delete";
-        delBtn.title = "Cannot delete if still assigned";
-        delBtn.addEventListener("click", () => {
-          if (usedCount > 0) { alert("You can’t delete this route because postcodes are still assigned to it."); return; }
-          if (!confirm(`Delete route "${routeName}"?`)) return;
-          delete modalDraftMeta[routeName];
-          buildRouteList();
-        });
-        actions.appendChild(delBtn);
-
-        item.appendChild(nameBox);
-        item.appendChild(daysBox);
-        item.appendChild(scopeBox);
-        item.appendChild(actions);
-
-        routeList.appendChild(item);
+        tbody.appendChild(tr);
       });
     }
 
-    addRouteBtn.addEventListener("click", () => {
-      const name = (newRouteName.value || "").trim();
-      if (!name) { alert("Enter a route name."); return; }
-      if (modalDraftMeta[name]) { alert("That route already exists."); return; }
-      modalDraftMeta[name] = { days: "Monday", channels: "ALL" };
-      newRouteName.value = "";
-      buildRouteList();
-    });
-
-    discardRouteChangesBtn.addEventListener("click", () => {
-      if (!confirm("Discard route changes?")) return;
-      modalDraftMeta = JSON.parse(JSON.stringify(routeMeta || {}));
-      buildRouteList();
-    });
-
-    applyRouteChangesBtn.addEventListener("click", () => {
-      // Convert diff into dirtyRouteUpdates
-      const before = routeMeta || {};
-      const after = modalDraftMeta || {};
-
-      // deletions
-      Object.keys(before).forEach(rn => {
-        if (!after[rn]) {
-          dirtyRouteUpdates.set(rn, { op:"delete", route: rn });
-        }
-      });
-
-      // upserts (new or changed)
-      Object.keys(after).forEach(rn => {
-        const a = after[rn] || {};
-        const b = before[rn] || {};
-        const aDays = String(a.days || "Monday");
-        const bDays = String(b.days || "");
-        const aCh = (a.channels === "ALL") ? "ALL" : JSON.stringify(a.channels || []);
-        const bCh = (b.channels === "ALL") ? "ALL" : JSON.stringify(b.channels || []);
-
-        if (!before[rn] || aDays !== bDays || aCh !== bCh) {
-          dirtyRouteUpdates.set(rn, {
-            op:"upsert",
-            route: rn,
-            days: aDays,
-            channels: (a.channels === "ALL") ? "ALL" : (a.channels || [])
-          });
-        }
-      });
-
-      // Apply draft to live meta for immediate UI behaviour
-      routeMeta = JSON.parse(JSON.stringify(after));
-      rebuildRouteDropdowns();
-      render();
-      updatePreview();
-      markDirty();
-      closeModal();
-      setStatus("Route changes staged. Click Save to commit to the Sheet.");
-    });
-
-    function slug(s){ return String(s||"").toLowerCase().replace(/\W+/g,"_").slice(0,60); }
-    function escapeHtml(s){
-      return String(s||"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    function textCell(text, cls){
+      const td = document.createElement("td");
+      td.className = cls;
+      td.textContent = text ?? "";
+      return td;
     }
 
-    /**************************************************************
-     * Save
-     **************************************************************/
-    async function saveToSheet() {
-      if (dirtyRows.size === 0 && dirtyRouteUpdates.size === 0) return;
+    function routeCell(i, r){
+      const td = document.createElement("td");
+      td.className = "col-route";
+      const sel = document.createElement("select");
+      sel.style.width = "100%";
+      sel.appendChild(new Option("(select route)", ""));
+      Object.keys(routeMeta).sort((a,b)=>a.localeCompare(b)).forEach(rt => sel.appendChild(new Option(rt, rt)));
+      sel.value = r.route || "";
 
-      const rowUpdates = Array.from(dirtyRows.values()).map(r => ({
-        prefix: r.prefix,
-        channel: r.channel,
-        route: r.route,
-        serviceType: r.serviceType,
-        leadTime: r.leadTime
-      }));
+      sel.addEventListener("change", () => {
+        r.route = sel.value;
+        // update displayed days immediately from meta if possible
+        if (r.route && routeMeta[r.route] && routeMeta[r.route].days) r.days = routeMeta[r.route].days;
+        dirty.set(`${r.prefix}||${r.channel}`, pickUpdatable(r));
+        markDirty();
+        renderTable(); // refresh days column
+      });
 
-      const routeUpdates = Array.from(dirtyRouteUpdates.values());
+      td.appendChild(sel);
+      return td;
+    }
 
-      setStatus("Saving to Google Sheet…");
-      saveBtn.disabled = true;
+    function serviceCell(i, r){
+      const td = document.createElement("td");
+      td.className = "col-service";
+      const sel = document.createElement("select");
+      sel.style.width = "100%";
+      ["","One-person","Two-person"].forEach(v => sel.appendChild(new Option(v || "(blank)", v)));
+      sel.value = r.serviceType || "";
+      sel.addEventListener("change", () => {
+        r.serviceType = sel.value;
+        dirty.set(`${r.prefix}||${r.channel}`, pickUpdatable(r));
+        markDirty();
+      });
+      td.appendChild(sel);
+      return td;
+    }
 
-      const payload = encodeURIComponent(JSON.stringify({ version, rowUpdates, routeUpdates }));
+    function leadCell(i, r){
+      const td = document.createElement("td");
+      td.className = "col-lead";
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.value = r.leadTime || "";
+      inp.style.width = "100%";
+      inp.addEventListener("blur", () => {
+        r.leadTime = inp.value.trim();
+        dirty.set(`${r.prefix}||${r.channel}`, pickUpdatable(r));
+        markDirty();
+      });
+      td.appendChild(inp);
+      return td;
+    }
+
+    function pickUpdatable(r){
+      return { prefix: r.prefix, channel: r.channel, route: r.route, serviceType: r.serviceType, leadTime: r.leadTime };
+    }
+
+    async function saveSelectedEdits(){
+      if (!dirty.size) return;
+      setStatus("Saving selected edits...");
+      saveSelectedBtn.disabled = true;
+
+      const payload = encodeURIComponent(JSON.stringify({ rowUpdates: Array.from(dirty.values()) }));
       const res = await jsonp(`${API_BASE}?action=save&payload=${payload}&cb=${Date.now()}`);
 
       if (!res || !res.ok) {
         setStatus(res && res.error ? res.error : "Save failed", true);
-        saveBtn.disabled = false;
+        saveSelectedBtn.disabled = false;
         return;
       }
 
+      dirty.clear();
+      markDirty();
       setStatus(`Saved. Updated rows: ${res.updatedRows || 0}. Corrected day cells: ${res.correctedDays || 0}.`);
-      await loadFromSheet();
+
+      // refresh current page
+      await runSearch(offset);
     }
 
-    saveBtn.addEventListener("click", saveToSheet);
+    async function runBulk(){
+      const mode = bulkMode.value;
+      const updates = {};
+      if (bulkRoute.value) updates.route = bulkRoute.value;
+      if (bulkServiceType.value) updates.serviceType = bulkServiceType.value;
+      if (bulkLeadTime.value.trim()) updates.leadTime = bulkLeadTime.value.trim();
 
-    /**************************************************************
-     * UI events
-     **************************************************************/
-    applyFiltersBtn.addEventListener("click", () => { render(); updatePreview(); });
+      if (!("route" in updates) && !("serviceType" in updates) && !("leadTime" in updates)) {
+        alert("Enter at least one bulk change field.");
+        return;
+      }
 
-    filterPrefix.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ render(); updatePreview(); }});
-    filterRoute.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ render(); updatePreview(); }});
+      const p = currentSearchParams();
 
-    reloadBtn.addEventListener("click", async () => {
-      if ((dirtyRows.size || dirtyRouteUpdates.size) && !confirm("You have unsaved changes. Reload anyway?")) return;
-      try { await loadFromSheet(); }
+      // Build payload by mode
+      const payload = { mode, channel: p.channel, prefixContains: p.prefixContains, routeContains: p.routeContains, updates };
+
+      if (mode === "range") {
+        if (!p.rangeFrom || !p.rangeTo) { alert("Enter From + To for range mode."); return; }
+        payload.rangeFrom = p.rangeFrom;
+        payload.rangeTo = p.rangeTo;
+      }
+
+      if (mode === "selected") {
+        const checked = Array.from(document.querySelectorAll(".rowCheck:checked"))
+          .map(cb => rows[Number(cb.dataset.i)])
+          .filter(Boolean)
+          .map(r => ({ prefix: r.prefix, channel: r.channel }));
+
+        if (!checked.length) { alert("Tick at least one row on this page."); return; }
+        payload.keys = checked;
+      }
+
+      if (!confirm("Run bulk update now? This will update the Sheet directly.")) return;
+
+      setStatus("Running bulk update...");
+      const encoded = encodeURIComponent(JSON.stringify(payload));
+      const res = await jsonp(`${API_BASE}?action=bulkUpdate&payload=${encoded}&cb=${Date.now()}`);
+
+      if (!res || !res.ok) {
+        setStatus(res && res.error ? res.error : "Bulk update failed", true);
+        return;
+      }
+
+      setStatus(`Bulk complete. Applied rows: ${res.appliedRows || 0}. Corrected day cells: ${res.correctedDays || 0}.`);
+      await runSearch(0);
+    }
+
+    // Events
+    document.getElementById("searchBtn").addEventListener("click", () => runSearch(0));
+    prevBtn.addEventListener("click", () => {
+      const limit = parseInt(pageSize.value, 10) || 500;
+      runSearch(Math.max(0, offset - limit));
+    });
+    nextBtn.addEventListener("click", () => {
+      const limit = parseInt(pageSize.value, 10) || 500;
+      runSearch(offset + limit);
+    });
+
+    document.getElementById("reloadMetaBtn").addEventListener("click", async () => {
+      try { await loadMeta(); }
       catch (e) { console.error(e); setStatus(String(e.message||e), true); }
     });
 
-    /**************************************************************
-     * Init
-     **************************************************************/
-    (async function init() {
-      try {
-        await loadFromSheet();
-      } catch (e) {
-        console.error(e);
-        setStatus("Failed to load. Check API_BASE is set to your Apps Script /exec URL and the script is deployed.", true);
-      }
+    saveSelectedBtn.addEventListener("click", saveSelectedEdits);
+    document.getElementById("runBulkBtn").addEventListener("click", runBulk);
+
+    masterCheck.addEventListener("change", () => {
+      document.querySelectorAll(".rowCheck").forEach(cb => cb.checked = masterCheck.checked);
+    });
+
+    // Init
+    (async function init(){
+      try { await loadMeta(); }
+      catch (e) { console.error(e); setStatus("Failed to load meta. Check API_BASE and deployment.", true); }
     })();
   </script>
 </body>
