@@ -1363,10 +1363,15 @@ async function loadScheduleFromCSV(){
       });
 
       for (const c of dateCols){
-        const th = document.createElement("th");
-        th.innerHTML = `${weekdayLabel(c.date)}<br>${displayDate(c.date)}`;
-        hr.appendChild(th);
-      }
+  const th = document.createElement("th");
+
+  const bankHolMark = isBankHolScheduleDate(c.iso)
+    ? "<br><span style='font-size:10px;font-weight:800;color:#8a5a12;'>BH Schedule</span>"
+    : "";
+
+  th.innerHTML = `${weekdayLabel(c.date)}<br>${displayDate(c.date)}${bankHolMark}`;
+  hr.appendChild(th);
+}
 
       thead.appendChild(hr);
       gridEl.appendChild(thead);
