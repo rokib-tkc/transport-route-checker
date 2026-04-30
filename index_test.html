@@ -1453,19 +1453,19 @@ function buildStatusStripHTMLMixed({ route, channel, prefix, leadTimeText, dateC
     const cells = row.querySelectorAll("td");
     if (cells.length < 5) return;
 
-    const referenceISO = nextDate ? toISODateKey(nextDate) : null;
-    const sourceRows = referenceISO ? rowsForDate(sourceBundle, referenceISO) : sourceBundle.standardRows;
+    // Keep Delivery Days showing the normal routes.csv schedule
+const standardMatching = sourceBundle.standardRows.filter(r =>
+  r.prefix === prefix &&
+  r.route === route &&
+  r.channel === channel
+);
 
-    const matching = sourceRows.filter(r =>
-      r.prefix === prefix &&
-      r.route === route &&
-      r.channel === channel
-    );
+const standardDays = sortDays([...new Set(standardMatching.flatMap(r => r.days))]);
 
-    const mixedDays = sortDays([...new Set(matching.flatMap(r => r.days))]);
+cells[1].textContent = standardDays.join(", ");
 
-    cells[1].textContent = mixedDays.join(", ");
-    cells[4].textContent = nextDate ? formatDayDate(nextDate) : "";
+// But calculate Next Delivery using mixed bank holiday schedule logic
+cells[4].textContent = nextDate ? formatDayDate(nextDate) : "";
   });
 }
 
