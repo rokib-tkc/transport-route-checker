@@ -1392,6 +1392,56 @@ function buildStatusStripHTMLMixed({ route, channel, prefix, leadTimeText, dateC
       });
     }
 
+
+    function updateChannelSummaryTablesMixed(rows, sourceBundle){
+  const grouped = groupByChannel(rows);
+  const channels = Object.keys(grouped).sort();
+
+  channels.forEach((channel, idx) => {
+    const rowsForChannel = grouped[channel];
+
+    const route = rowsForChannel[0].route;
+    const leadTime = rowsForChannel[0].leadTime;
+    const prefix = rowsForChannel[0].prefix;
+
+    const nextDate = findNextDeliveryDateMixed({
+      sourceBundle,
+      route,
+      channel,
+      prefix,
+      leadTimeText: leadTime
+    });
+
+    const stripId = `strip_${idx}_${route.replace(/\s+/g,'_')}`;
+    const host = document.getElementById(stripId);
+    if (!host) return;
+
+    const block = host.closest(".channel-block");
+    if (!block) return;
+
+    const row = block.querySelector("tbody tr");
+    if (!row) return;
+
+    const cells = row.querySelectorAll("td");
+    if (cells.length < 5) return;
+
+    const referenceISO = nextDate ? toISODateKey(nextDate) : null;
+    const sourceRows = referenceISO ? rowsForDate(sourceBundle, referenceISO) : sourceBundle.standardRows;
+
+    const matching = sourceRows.filter(r =>
+      r.prefix === prefix &&
+      r.route === route &&
+      r.channel === channel
+    );
+
+    const mixedDays = sortDays([...new Set(matching.flatMap(r => r.days))]);
+
+    cells[1].textContent = mixedDays.join(", ");
+    cells[4].textContent = nextDate ? formatDayDate(nextDate) : "";
+  });
+}
+
+    
 async function populateStripsMixed(rows, sourceBundle){
   const grouped = groupByChannel(rows);
   const channels = Object.keys(grouped).sort();
@@ -1532,7 +1582,9 @@ async function performSearch() {
       );
 
       const sourceBundle = await getRowsForDateCols(uniqueCols);
-      await populateStripsMixed(matchingRows, sourceBundle);
+
+updateChannelSummaryTablesMixed(matchingRows, sourceBundle);
+await populateStripsMixed(matchingRows, sourceBundle);
     })();
 
   } catch (err) {
