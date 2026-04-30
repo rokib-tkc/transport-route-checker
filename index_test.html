@@ -1448,55 +1448,100 @@ async function populateStripsMixed(rows, sourceBundle){
       // do NOT force show the link here; only show after successful results build
     }
 
-    // ============================================================
-    // SEARCH HANDLING
-    // ============================================================
-    (async () => {
-  let allVisibleCols = [];
+// ============================================================
+// SEARCH HANDLING
+// ============================================================
+async function performSearch() {
+  const input = document.getElementById("postcodeInput").value.trim();
 
-  try{
-    const grouped = groupByChannel(matchingRows);
-    const channels = Object.keys(grouped);
-
-    let globalFromISO = null;
-    let globalToISO = null;
-
-    for (const channel of channels){
-      const rowsForChannel = grouped[channel];
-
-      const leadTime = rowsForChannel[0].leadTime;
-      const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
-
-      const nextDate = findNextDeliveryDate(allDays, leadTime);
-      const stripStart = nextDate || getStartDateConsideringCutoff();
-      const cols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
-
-      allVisibleCols.push(...cols);
-
-      if (cols.length){
-        const fromISO = cols[0].iso;
-        const toISO = cols[cols.length - 1].iso;
-
-        if (!globalFromISO || fromISO < globalFromISO) globalFromISO = fromISO;
-        if (!globalToISO || toISO > globalToISO) globalToISO = toISO;
-      }
-    }
-
-    if (globalFromISO && globalToISO){
-      await loadOverridesForRange(globalFromISO, globalToISO);
-    }
-
-  }catch(apiErr){
-    console.warn("Route status API not available. Showing default strips:", apiErr);
+  if (!input) {
+    showLandingCarrier();
+    document.getElementById("noResults").style.display = "block";
+    document.getElementById("noResults").textContent = "Please enter a postcode prefix.";
+    return;
   }
 
-  const uniqueCols = Array.from(
-    new Map(allVisibleCols.map(c => [c.iso, c])).values()
-  );
+  clearResultsForLoading();
+  setLoading(true, "Loading route information…", "Fetching routes.");
 
-  const sourceBundle = await getRowsForDateCols(uniqueCols);
-  await populateStripsMixed(matchingRows, sourceBundle);
-})();
+  try {
+    await bankHolidaysReady;
+    await bankHolScheduleReady;
+
+    const cleaned = normaliseInputPostcode(input);
+    const routingData = await getMainSearchRows();
+    const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
+
+    if (!bestPrefix) {
+      setLoading(false);
+      showLandingCarrier();
+      document.getElementById("noResults").style.display = "block";
+      document.getElementById("noResults").textContent = "No routing information found for that postcode prefix.";
+      return;
+    }
+
+    hideLandingCarrier();
+
+    const matchingRows = routingData.filter(r => r.prefix === bestPrefix);
+
+    buildResultsHTMLFast(matchingRows, bestPrefix, input);
+
+    setLoading(false);
+
+    (async () => {
+      let allVisibleCols = [];
+
+      try {
+        const grouped = groupByChannel(matchingRows);
+        const channels = Object.keys(grouped);
+
+        let globalFromISO = null;
+        let globalToISO = null;
+
+        for (const channel of channels) {
+          const rowsForChannel = grouped[channel];
+
+          const leadTime = rowsForChannel[0].leadTime;
+          const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
+
+          const nextDate = findNextDeliveryDate(allDays, leadTime);
+          const stripStart = nextDate || getStartDateConsideringCutoff();
+          const cols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+
+          allVisibleCols.push(...cols);
+
+          if (cols.length) {
+            const fromISO = cols[0].iso;
+            const toISO = cols[cols.length - 1].iso;
+
+            if (!globalFromISO || fromISO < globalFromISO) globalFromISO = fromISO;
+            if (!globalToISO || toISO > globalToISO) globalToISO = toISO;
+          }
+        }
+
+        if (globalFromISO && globalToISO) {
+          await loadOverridesForRange(globalFromISO, globalToISO);
+        }
+
+      } catch (apiErr) {
+        console.warn("Route status API not available. Showing default strips:", apiErr);
+      }
+
+      const uniqueCols = Array.from(
+        new Map(allVisibleCols.map(c => [c.iso, c])).values()
+      );
+
+      const sourceBundle = await getRowsForDateCols(uniqueCols);
+      await populateStripsMixed(matchingRows, sourceBundle);
+    })();
+
+  } catch (err) {
+    console.error("Error during search:", err);
+    setLoading(false);
+    showLandingCarrier();
+    alert("Routing data is not available at the moment. Please try again in a moment or contact the system owner.");
+  }
+}
 
     document.getElementById("searchButton").onclick = performSearch;
     document.getElementById("postcodeInput").addEventListener("keydown", e => {
