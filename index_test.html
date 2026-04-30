@@ -642,11 +642,12 @@
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
       DAYS_AHEAD: 10,
 
-      // ROUTES now come from Google Sheets published CSV:
-      ROUTES_SHEET_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRH6-jQDjHdpThiVhGe1mwrfOD_QRYbYYlCx8Mo1HvA-vLxudRTnpJMRWEZlyxGE-f9OXtnQBGDWoLB/pub?gid=0&single=true&output=csv",
+ROUTES_CSV_URL: "routes.csv",
+BANK_HOL_ROUTES_CSV_URL: "bank_hol_routes.csv",
+BANK_HOL_SCHEDULE_DATES_CSV_URL: "bank_hol_schedule_dates.csv",
 
-      BANK_HOLIDAYS_CSV_URL: "bank_holidays.csv",
-      CHANNEL_RULES_CSV_URL: "channel_rules.csv",
+BANK_HOLIDAYS_CSV_URL: "bank_holidays.csv",
+CHANNEL_RULES_CSV_URL: "channel_rules.csv",
 
       // Used for overlay schedule inference (matches admin logic)
       COMPONENT_CHANNEL_NAME: "Component Channel"
@@ -803,6 +804,37 @@
         });
     }
 
+    let bankHolScheduleDateSet = new Set();
+let bankHolScheduleReady = Promise.resolve();
+
+function isBankHolScheduleDateISO(iso){
+  return bankHolScheduleDateSet.has(String(iso || "").trim());
+}
+
+function loadBankHolScheduleDates() {
+  return fetch(CONFIG.BANK_HOL_SCHEDULE_DATES_CSV_URL + "?cb=" + Date.now())
+    .then(r => {
+      if (!r.ok) throw new Error("Failed to load bank_hol_schedule_dates.csv");
+      return r.text();
+    })
+    .then(text => {
+      const parsed = parseDelimited(text);
+      const set = new Set();
+
+      parsed.rows.forEach(row => {
+        const d = String(row.date || row.Date || "").trim();
+        if (d) set.add(d);
+      });
+
+      bankHolScheduleDateSet = set;
+    })
+    .catch(err => {
+      console.warn("Bank holiday schedule dates not loaded. Using normal routes only:", err);
+      bankHolScheduleDateSet = new Set();
+    });
+}
+    
+
     // ============================================================
     // ROUTES PARSING (routes from Google Sheets CSV)
     // ============================================================
@@ -829,12 +861,66 @@
       }).filter(r => r.prefix && r.channel);
     }
 
-    async function fetchRoutesFromSheet() {
-      const url = CONFIG.ROUTES_SHEET_CSV_URL + "&cb=" + Date.now();
-      const res = await fetch(url, { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load routes sheet CSV");
-      return await res.text();
-    }
+   const routeFileCache = {
+  standardText: null,
+  bankHolText: null,
+  standardRows: null,
+  bankHolRows: null
+};
+
+async function fetchCsvText(url){
+  const joiner = url.includes("?") ? "&" : "?";
+  const res = await fetch(url + joiner + "cb=" + Date.now(), { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to load CSV: " + url);
+  return await res.text();
+}
+
+async function getStandardRouteRows(){
+  if (!routeFileCache.standardRows){
+    routeFileCache.standardText = await fetchCsvText(CONFIG.ROUTES_CSV_URL);
+    routeFileCache.standardRows = parseRoutes(routeFileCache.standardText);
+  }
+  return routeFileCache.standardRows;
+}
+
+async function getBankHolRouteRows(){
+  if (!routeFileCache.bankHolRows){
+    routeFileCache.bankHolText = await fetchCsvText(CONFIG.BANK_HOL_ROUTES_CSV_URL);
+    routeFileCache.bankHolRows = parseRoutes(routeFileCache.bankHolText);
+  }
+  return routeFileCache.bankHolRows;
+}
+
+async function getRowsForDateCols(dateCols){
+  await bankHolScheduleReady;
+
+  const needsBankHolRoutes = dateCols.some(c => isBankHolScheduleDateISO(c.iso));
+
+  const standardRows = await getStandardRouteRows();
+  const bankHolRows = needsBankHolRoutes ? await getBankHolRouteRows() : null;
+
+  return { standardRows, bankHolRows, needsBankHolRoutes };
+}
+
+function rowsForDate(sourceBundle, dateISO){
+  if (isBankHolScheduleDateISO(dateISO) && sourceBundle.bankHolRows){
+    return sourceBundle.bankHolRows;
+  }
+  return sourceBundle.standardRows;
+}
+
+async function getMainSearchRows(){
+  await bankHolScheduleReady;
+
+  const referenceDate = getStartDateConsideringCutoff();
+  const referenceISO = toISODateKey(referenceDate);
+
+  if (isBankHolScheduleDateISO(referenceISO)){
+    return await getBankHolRouteRows();
+  }
+
+  return await getStandardRouteRows();
+}
 
     // ============================================================
     // WORKING DAY + CUTOFF HELPERS (channels + Carrier + overlay)
@@ -984,6 +1070,29 @@
       return null;
     }
 
+    function findNextDeliveryDateMixed({ sourceBundle, route, channel, prefix, leadTimeText }) {
+  const start = getStartDateConsideringCutoff();
+  const leadDays = parseLeadTimeWorkingDays(leadTimeText);
+  const earliest = leadDays > 0 ? addWorkingDays(start, leadDays) : start;
+
+  let d = startOfDay(earliest);
+
+  for (let i = 0; i < 120; i++) {
+    if (isWorkingDay(d)) {
+      const iso = toISODateKey(d);
+      const runDays = getRunDaysForRouteOnDate(sourceBundle, iso, route, channel, prefix);
+
+      if (routeRunsOnDayName(runDays, d)) {
+        return d;
+      }
+    }
+
+    d.setDate(d.getDate() + 1);
+  }
+
+  return null;
+}
+
     // ============================================================
     // ROUTE STATUS OVERRIDES (Google Sheet via Apps Script)
     // ============================================================
@@ -1041,37 +1150,61 @@
       return { cls: "availableCell statusCell", text: STATUS.AVAILABLE };
     }
 
-    function buildStatusStripHTML(route, runDaysArray, leadTimeText, dateCols){
-      const leadDays = parseLeadTimeWorkingDays(leadTimeText);
-      const earliest = earliestBookableDeliveryDate(leadDays);
+   function findRowsForRouteChannelPrefix(rows, route, channel, prefix){
+  return rows.filter(r =>
+    r.route === route &&
+    r.channel === channel &&
+    r.prefix === prefix
+  );
+}
 
-      const runDays = new Set((runDaysArray || []).map(d => String(d).trim().toLowerCase()).filter(Boolean));
+function getRunDaysForRouteOnDate(sourceBundle, dateISO, route, channel, prefix){
+  const sourceRows = rowsForDate(sourceBundle, dateISO);
+  const matching = findRowsForRouteChannelPrefix(sourceRows, route, channel, prefix);
 
-      let thead = "<thead><tr>";
-      for (const c of dateCols){
-        thead += `<th>${c.head}</th>`;
-      }
-      thead += "</tr></thead>";
+  const days = sortDays([...new Set(matching.flatMap(r => r.days))]);
+  return new Set(days.map(d => String(d).trim().toLowerCase()).filter(Boolean));
+}
 
-      let tbody = "<tbody><tr>";
-      for (const c of dateCols){
-        const runs = routeRunsOnDayName(runDays, c.date);
-        const isClosed = runs && (startOfDay(c.date) < startOfDay(earliest));
-        const ov = overridesMap.get(ovKey(c.iso, route));
-        const { cls, text } = classifyStatusCell({ runs, isClosed, overrideStatus: ov });
-        tbody += `<td class="${cls}">${text}</td>`;
-      }
-      tbody += "</tr></tbody>";
+function buildStatusStripHTMLMixed({ route, channel, prefix, leadTimeText, dateCols, sourceBundle }){
+  const leadDays = parseLeadTimeWorkingDays(leadTimeText);
+  const earliest = earliestBookableDeliveryDate(leadDays);
 
-      return `
-        <div class="status-strip" aria-label="Route status (next ${dateCols.length} working days)">
-          <table>
-            ${thead}
-            ${tbody}
-          </table>
-        </div>
-      `;
-    }
+  let thead = "<thead><tr>";
+  for (const c of dateCols){
+    const bankHolMark = isBankHolScheduleDateISO(c.iso) ? "<br><span style='font-size:10px;font-weight:800;color:#8a5a12;'>BH Schedule</span>" : "";
+    thead += `<th>${c.head}${bankHolMark}</th>`;
+  }
+  thead += "</tr></thead>";
+
+  let tbody = "<tbody><tr>";
+
+  for (const c of dateCols){
+    const runDays = getRunDaysForRouteOnDate(sourceBundle, c.iso, route, channel, prefix);
+    const runs = routeRunsOnDayName(runDays, c.date);
+    const isClosed = runs && (startOfDay(c.date) < startOfDay(earliest));
+    const ov = overridesMap.get(ovKey(c.iso, route));
+
+    const { cls, text } = classifyStatusCell({
+      runs,
+      isClosed,
+      overrideStatus: ov
+    });
+
+    tbody += `<td class="${cls}">${text}</td>`;
+  }
+
+  tbody += "</tr></tbody>";
+
+  return `
+    <div class="status-strip" aria-label="Route status (next ${dateCols.length} working days)">
+      <table>
+        ${thead}
+        ${tbody}
+      </table>
+    </div>
+  `;
+}
 
     // ORIGINAL-STYLE PLACEHOLDER STRIP (headers + single loading row)
     function buildStatusStripPlaceholderHTML(dateCols){
@@ -1259,32 +1392,43 @@
       });
     }
 
-    // UPDATED: populate by replacing innerHTML of the stable container
-    function populateStrips(rows){
-      const grouped = groupByChannel(rows);
-      const channels = Object.keys(grouped).sort();
+async function populateStripsMixed(rows, sourceBundle){
+  const grouped = groupByChannel(rows);
+  const channels = Object.keys(grouped).sort();
 
-      channels.forEach((channel, idx) => {
-        const rowsForChannel = grouped[channel];
+  channels.forEach((channel, idx) => {
+    const rowsForChannel = grouped[channel];
 
-        const route = rowsForChannel[0].route;
-        const leadTime = rowsForChannel[0].leadTime;
+    const route = rowsForChannel[0].route;
+    const leadTime = rowsForChannel[0].leadTime;
+    const prefix = rowsForChannel[0].prefix;
 
-        const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
+    const nextDate = findNextDeliveryDateMixed({
+  sourceBundle,
+  route,
+  channel,
+  prefix,
+  leadTimeText: leadTime
+});
+    const stripStart = nextDate || getStartDateConsideringCutoff();
+    const dateColsForChannel = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
 
-        const nextDate = findNextDeliveryDate(allDays, leadTime);
-        const stripStart = nextDate || getStartDateConsideringCutoff();
-        const dateColsForChannel = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+    const stripHTML = buildStatusStripHTMLMixed({
+      route,
+      channel,
+      prefix,
+      leadTimeText: leadTime,
+      dateCols: dateColsForChannel,
+      sourceBundle
+    });
 
-        const stripHTML = buildStatusStripHTML(route, allDays, leadTime, dateColsForChannel);
-
-        const stripId = `strip_${idx}_${route.replace(/\s+/g,'_')}`;
-        const host = document.getElementById(stripId);
-        if (host){
-          host.innerHTML = stripHTML;
-        }
-      });
+    const stripId = `strip_${idx}_${route.replace(/\s+/g,'_')}`;
+    const host = document.getElementById(stripId);
+    if (host){
+      host.innerHTML = stripHTML;
     }
+  });
+}
 
     // ============================================================
     // LANDING / VISIBILITY CONTROL
@@ -1324,9 +1468,7 @@
         await bankHolidaysReady;
 
         const cleaned = normaliseInputPostcode(input);
-        const text = await fetchRoutesFromSheet();
-
-        const routingData = parseRoutes(text);
+        const routingData = await getMainSearchRows();
         const bestPrefix = findBestMatchingPrefix(routingData, cleaned);
 
         if (!bestPrefix) {
@@ -1372,15 +1514,53 @@
               }
             }
 
-            if (globalFromISO && globalToISO){
-              await loadOverridesForRange(globalFromISO, globalToISO);
-            }
+            let allVisibleCols = [];
 
-            populateStrips(matchingRows);
+for (const channel of channels){
+  const rowsForChannel = grouped[channel];
+
+  const leadTime = rowsForChannel[0].leadTime;
+  const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
+
+  const nextDate = findNextDeliveryDate(allDays, leadTime);
+  const stripStart = nextDate || getStartDateConsideringCutoff();
+  const cols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+
+  allVisibleCols.push(...cols);
+
+  if (cols.length){
+    const fromISO = cols[0].iso;
+    const toISO = cols[cols.length - 1].iso;
+
+    if (!globalFromISO || fromISO < globalFromISO) globalFromISO = fromISO;
+    if (!globalToISO || toISO > globalToISO) globalToISO = toISO;
+  }
+}
+
+if (globalFromISO && globalToISO){
+  await loadOverridesForRange(globalFromISO, globalToISO);
+}
+
+const uniqueCols = Array.from(
+  new Map(allVisibleCols.map(c => [c.iso, c])).values()
+);
+
+const sourceBundle = await getRowsForDateCols(uniqueCols);
+
+await populateStripsMixed(matchingRows, sourceBundle);
 
           }catch(apiErr){
             console.warn("Route status API not available. Showing default strips:", apiErr);
-            populateStrips(matchingRows);
+            }catch(apiErr){
+  console.warn("Route status API not available. Showing default strips:", apiErr);
+
+  const uniqueCols = Array.from(
+    new Map(allVisibleCols.map(c => [c.iso, c])).values()
+  );
+
+  const sourceBundle = await getRowsForDateCols(uniqueCols);
+  await populateStripsMixed(matchingRows, sourceBundle);
+}
           }
         })();
 
@@ -1579,164 +1759,195 @@
     }
 
     async function loadRoutesOverlay(force){
-      try{
-        showOverlayLoading(true);
-        overlayLoadedOnce = true;
+  try{
+    showOverlayLoading(true);
+    overlayLoadedOnce = true;
 
-        await bankHolidaysReady;
+    await bankHolidaysReady;
+    await bankHolScheduleReady;
 
-        const text = await fetchRoutesFromSheet();
-        const parsed = parseDelimited(text);
-        const rows = parsed.rows || [];
+    const start = getOverlayGridStartDate();
+    const dateCols = buildWorkingDateColsFrom(start, CONFIG.DAYS_AHEAD);
 
-        const targetChannel = String(CONFIG.COMPONENT_CHANNEL_NAME || "").trim().toLowerCase();
-        const schedule = new Map();
-        const routeDistricts = new Map();
-
-        function parseRunDaysFromRow(r){
-          const daysStr = String(r.days || "").trim();
-          if (daysStr){
-            const set = new Set();
-            daysStr.split("|").map(x=>x.trim()).filter(Boolean).forEach(dayName => {
-              const idx = weekdayIndexFromName(dayName);
-              if (idx !== null) set.add(idx);
-            });
-            return set;
-          }
-          const set = new Set();
-          for (const k of Object.keys(r)){
-            const idx = weekdayIndexFromName(k);
-            if (idx !== null && truthy(r[k])) set.add(idx);
-          }
-          return set;
-        }
-
-        for (const r of rows){
-          const channel = String(r.channel || "").trim().toLowerCase();
-          if (targetChannel && channel !== targetChannel) continue;
-
-          const route = String(r.route || "").trim();
-          if (!route) continue;
-
-          if (route.toUpperCase().startsWith("3PLCO")) continue;
-          if (route.length <= 5) continue;
-
-          const days = parseRunDaysFromRow(r);
-          if (days.size){
-            if (!schedule.has(route)) schedule.set(route, days);
-          }
-
-          const prefixCell = r.prefix || "";
-          if (!routeDistricts.has(route)) routeDistricts.set(route, []);
-          routeDistricts.get(route).push(...extractDistrictsFromPrefixCell(prefixCell));
-        }
-
-        if (schedule.size === 0){
-          showOverlayLoading(false);
-          showOverlayError(`No route schedules could be inferred for "${CONFIG.COMPONENT_CHANNEL_NAME}".`);
-          return;
-        }
-
-        const routePostcodeGroups = new Map();
-        for (const [route, districts] of routeDistricts.entries()){
-          routePostcodeGroups.set(route, groupDistrictsToRanges(districts));
-        }
-
-        const start = getOverlayGridStartDate();
-        const dateCols = buildWorkingDateColsFrom(start, CONFIG.DAYS_AHEAD);
-        if (!dateCols.length){
-          showOverlayLoading(false);
-          showOverlayError("No working-day columns could be generated.");
-          return;
-        }
-
-        try{
-          await loadOverridesForRange(dateCols[0].iso, dateCols[dateCols.length - 1].iso);
-        }catch(err){
-          console.warn("Overlay: status API failed; showing defaults", err);
-          overridesMap.clear();
-        }
-
-        const routes = Array.from(schedule.keys())
-          .sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
-
-        let html = "<thead><tr>";
-        html += `<th class="routeHead">Route</th>`;
-        for (const c of dateCols){
-          html += `<th>${c.head}</th>`;
-        }
-        html += "</tr></thead><tbody>";
-
-        for (const route of routes){
-          html += `<tr>`;
-          const groups = routePostcodeGroups.get(route) || "";
-          html += `
-            <td class="routeCell">
-              <span class="routeName">
-                ${escapeHTML(route)}
-                <span class="routeTooltip">
-                  <div class="routeTooltipTitle">Postcode groups</div>
-                  <div class="routeTooltipBody">${escapeHTML(groups || "No postcode groups found for this route.")}</div>
-                </span>
-              </span>
-            </td>
-          `;
-
-          const runDays = schedule.get(route) || new Set();
-
-          for (const c of dateCols){
-            const runs = runDays.has(c.weekday);
-            if (!runs){
-              html += `<td class="gridInactive"></td>`;
-              continue;
-            }
-            const ov = overridesMap.get(ovKey(c.iso, route));
-            let cls = "gridAvailable";
-            let txt = STATUS.AVAILABLE;
-
-            if (ov === STATUS.FULL_WEIGHT){ cls = "gridFullWeight"; txt = STATUS.FULL_WEIGHT; }
-            else if (ov === STATUS.FULL_DROPS){ cls = "gridFullDrops"; txt = STATUS.FULL_DROPS; }
-            else if (ov === STATUS.AVAILABLE){ cls = "gridAvailable"; txt = STATUS.AVAILABLE; }
-
-            html += `<td class="${cls}">${escapeHTML(txt)}</td>`;
-          }
-
-          html += `</tr>`;
-        }
-
-        html += "</tbody>";
-        gridEl.innerHTML = html;
-
-        gridWrapEl.style.display = "block";
-        showOverlayLoading(false);
-
-        adjustAllRouteTooltips();
-
-      }catch(err){
-        console.error(err);
-        showOverlayLoading(false);
-        showOverlayError("Error loading routes status. Please try Refresh.");
-      }
+    if (!dateCols.length){
+      showOverlayLoading(false);
+      showOverlayError("No working-day columns could be generated.");
+      return;
     }
+
+    const sourceBundle = await getRowsForDateCols(dateCols);
+
+    const targetChannel = String(CONFIG.COMPONENT_CHANNEL_NAME || "").trim().toLowerCase();
+
+    function parseRunDaysFromRows(rows, route){
+      const matchingRows = rows.filter(r => {
+        const channel = String(r.channel || "").trim().toLowerCase();
+        return (!targetChannel || channel === targetChannel) &&
+          String(r.route || "").trim() === route;
+      });
+
+      const days = matchingRows.flatMap(r => r.days || []);
+      const dayIndexes = new Set();
+
+      days.forEach(dayName => {
+        const idx = weekdayIndexFromName(dayName);
+        if (idx !== null) dayIndexes.add(idx);
+      });
+
+      return dayIndexes;
+    }
+
+    function getOverlayRowsForDate(dateISO){
+      return rowsForDate(sourceBundle, dateISO);
+    }
+
+    const routeDistricts = new Map();
+    const allRoutesSet = new Set();
+
+    const allPossibleRows = [
+      ...(sourceBundle.standardRows || []),
+      ...(sourceBundle.bankHolRows || [])
+    ];
+
+    for (const r of allPossibleRows){
+      const channel = String(r.channel || "").trim().toLowerCase();
+      if (targetChannel && channel !== targetChannel) continue;
+
+      const route = String(r.route || "").trim();
+      if (!route) continue;
+
+      if (route.toUpperCase().startsWith("3PLCO")) continue;
+      if (route.length <= 5) continue;
+
+      allRoutesSet.add(route);
+
+      const prefixCell = r.prefix || "";
+      if (!routeDistricts.has(route)) routeDistricts.set(route, []);
+      routeDistricts.get(route).push(...extractDistrictsFromPrefixCell(prefixCell));
+    }
+
+    if (allRoutesSet.size === 0){
+      showOverlayLoading(false);
+      showOverlayError(`No route schedules could be inferred for "${CONFIG.COMPONENT_CHANNEL_NAME}".`);
+      return;
+    }
+
+    const routePostcodeGroups = new Map();
+    for (const [route, districts] of routeDistricts.entries()){
+      routePostcodeGroups.set(route, groupDistrictsToRanges(districts));
+    }
+
+    try{
+      await loadOverridesForRange(dateCols[0].iso, dateCols[dateCols.length - 1].iso);
+    }catch(err){
+      console.warn("Overlay: status API failed; showing defaults", err);
+      overridesMap.clear();
+    }
+
+    const routes = Array.from(allRoutesSet)
+      .sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
+
+    let html = "<thead><tr>";
+    html += `<th class="routeHead">Route</th>`;
+
+    for (const c of dateCols){
+      const bankHolMark = isBankHolScheduleDateISO(c.iso)
+        ? "<br><span style='font-size:10px;font-weight:800;color:#8a5a12;'>BH Schedule</span>"
+        : "";
+
+      html += `<th>${c.head}${bankHolMark}</th>`;
+    }
+
+    html += "</tr></thead><tbody>";
+
+    for (const route of routes){
+      html += `<tr>`;
+
+      const groups = routePostcodeGroups.get(route) || "";
+
+      html += `
+        <td class="routeCell">
+          <span class="routeName">
+            ${escapeHTML(route)}
+            <span class="routeTooltip">
+              <div class="routeTooltipTitle">Postcode groups</div>
+              <div class="routeTooltipBody">${escapeHTML(groups || "No postcode groups found for this route.")}</div>
+            </span>
+          </span>
+        </td>
+      `;
+
+      for (const c of dateCols){
+        const rowsForThisDate = getOverlayRowsForDate(c.iso);
+        const runDays = parseRunDaysFromRows(rowsForThisDate, route);
+
+        const runs = runDays.has(c.weekday);
+
+        if (!runs){
+          html += `<td class="gridInactive"></td>`;
+          continue;
+        }
+
+        const ov = overridesMap.get(ovKey(c.iso, route));
+
+        let cls = "gridAvailable";
+        let txt = STATUS.AVAILABLE;
+
+        if (ov === STATUS.FULL_WEIGHT){
+          cls = "gridFullWeight";
+          txt = STATUS.FULL_WEIGHT;
+        } else if (ov === STATUS.FULL_DROPS){
+          cls = "gridFullDrops";
+          txt = STATUS.FULL_DROPS;
+        } else if (ov === STATUS.AVAILABLE){
+          cls = "gridAvailable";
+          txt = STATUS.AVAILABLE;
+        }
+
+        html += `<td class="${cls}">${escapeHTML(txt)}</td>`;
+      }
+
+      html += `</tr>`;
+    }
+
+    html += "</tbody>";
+
+    gridEl.innerHTML = html;
+    gridWrapEl.style.display = "block";
+    showOverlayLoading(false);
+
+    adjustAllRouteTooltips();
+
+  }catch(err){
+    console.error(err);
+    showOverlayLoading(false);
+    showOverlayError("Error loading routes status. Please try Refresh.");
+  }
+}
 
     // ============================================================
     // INIT
     // ============================================================
     (function init() {
-      loadChannelRules();
+  loadChannelRules();
 
-      const btn = document.getElementById("searchButton");
-      btn.disabled = true;
+  const btn = document.getElementById("searchButton");
+  btn.disabled = true;
 
-      bankHolidaysReady = loadBankHolidays().finally(() => {
-        btn.disabled = false;
-        computeCarrierNextDates();
-        setInterval(computeCarrierNextDates, 60 * 1000);
-        window.addEventListener("focus", computeCarrierNextDates);
-      });
+  bankHolidaysReady = loadBankHolidays();
 
-      showLandingCarrier(); // also hides the Carrier link
-    })();
+  bankHolScheduleReady = bankHolidaysReady
+    .then(() => loadBankHolScheduleDates())
+    .finally(() => {
+      btn.disabled = false;
+      computeCarrierNextDates();
+      setInterval(computeCarrierNextDates, 60 * 1000);
+      window.addEventListener("focus", computeCarrierNextDates);
+    });
+
+  showLandingCarrier();
+})();
   </script>
 </body>
 </html>
+
