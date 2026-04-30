@@ -1,0 +1,1756 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Route Status Admin</title>
+  <style>
+    :root{
+      --border:#cfcfcf;
+      --header:#f0f0f0;
+      --routecol:#e6e6e6;
+      --inactive:#f7f7f7;
+
+      --green:#00b050;
+      --red:#ff0000;
+      --orange:#ffc000;
+
+      --text:#111;
+
+      /* Match Route Checker channel-title ("Component Channel", etc.) */
+      --channelTitleSize: 16px;
+      --channelTitleWeight: 700;
+    }
+
+    *{ box-sizing: border-box; font-family: Arial, sans-serif; }
+
+    body{
+      margin: 0;
+      padding: 20px;
+      color: var(--text);
+      background: #f5f5f5;
+    }
+
+    .container{
+      max-width: 1400px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      position: relative; /* for top pills positioning */
+    }
+
+    /* ============================================================
+       LOADING OVERLAY (same UX style as Route Checker)
+       ============================================================ */
+    .loading-overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999999;
+      padding: 20px;
+    }
+    .loading-panel{
+      width: 100%;
+      max-width: 360px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+      padding: 16px 18px;
+      text-align: center;
+    }
+    .spinner{
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 5px solid #d9d9d9;
+      border-top-color: #0078d4;
+      margin: 0 auto 12px;
+      animation: spin 0.85s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-title{
+      font-size: 14px;
+      font-weight: 800;
+      margin: 0 0 4px;
+      color: #111;
+    }
+    .loading-sub{
+      font-size: 12.5px;
+      margin: 0;
+      color: #444;
+      line-height: 1.35;
+    }
+
+    /* ============================================================
+       TOP PILLS (Archive left, Log out right)
+       ============================================================ */
+    .topPill{
+      position: absolute;
+      top: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid #cfcfcf;
+      background: #ffffff;
+      color: #0078d4;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    .topPill:hover{
+      border-color: #b7b7b7;
+      color: #005ea3;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    }
+    .topPill:active{
+      transform: translateY(1px);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .archivePill{ left: 16px; }
+    .logoutPill{ right: 16px; }
+    .routesEditorPill{ left: 110px; }
+    
+    /* ---------- ARCHIVE OVERLAY ---------- */
+    .overlay{
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 99999;
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+      padding: 18px;
+    }
+    .overlayPanel{
+      width: 100%;
+      height: 100%;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .overlayHeader{
+      padding: 16px 18px;
+      background: #f7f7f7;
+      border-bottom: 1px solid #e5e5e5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .overlayTitle{
+      font-size: 18px;
+      font-weight: 800;
+      margin: 0;
+    }
+    .overlayControls{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .overlayControls label{
+      font-size: 13px;
+      font-weight: 700;
+      color: #333;
+    }
+    .overlayControls input[type="date"]{
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #cfcfcf;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .overlayBody{
+      padding: 16px 18px;
+      overflow: auto;
+      background: #fafafa;
+      flex: 1;
+    }
+
+    .archiveNote{
+      font-size: 13px;
+      color: #333;
+      margin: 0 0 12px;
+      line-height: 1.35;
+    }
+
+    .archiveDateHeading{
+      font-size: 16px;
+      font-weight: 800;
+      margin: 10px 0 12px;
+      text-align: left;
+    }
+
+    .archiveWrap{
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      background: #fff;
+      overflow: hidden;
+    }
+    .archiveTable{
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .archiveTable th, .archiveTable td{
+      border: 1px solid #ddd;
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.25;
+      text-align: left;
+      vertical-align: middle;
+      word-break: break-word;
+      white-space: normal;
+    }
+    .archiveTable th{
+      background: var(--header);
+      font-weight: 800;
+      font-size: 13px;
+    }
+    .pill{
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: 12px;
+      border: 1px solid #bbb;
+      background: #fff;
+    }
+    .pillWeight{ background: var(--red); color:#fff; border-color: #cc0000; }
+    .pillDrops{ background: var(--orange); color:#111; border-color: #d6a100; }
+
+    .overlayCloseBtn{
+      background: transparent;
+      color: #0078d4;
+      border: none;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: underline;
+      padding: 0;
+      font-size: 14px;
+    }
+    .overlayCloseBtn:hover{ color:#005ea3; }
+
+    /* ---------- TOKEN GATE ---------- */
+    .gateWrap{
+      max-width: 520px;
+      margin: 0 auto;
+      border: 1px solid #ddd;
+      border-radius: 14px;
+      padding: 16px 16px 14px;
+      background: #fff;
+    }
+    .gateRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin-top:12px;
+      flex-wrap:wrap;
+      justify-content:center;
+    }
+    .gateRow input{
+      flex: 1;
+      min-width: 240px;
+      padding: 10px 10px;
+      border-radius: 10px;
+      border: 1px solid #bbb;
+      font-size: 14px;
+    }
+
+    /* ---------- TOP LAYOUT ---------- */
+    .top{
+      margin: 0 auto 10px;
+      text-align: center;
+    }
+    h1{
+      margin: 0 0 8px;
+      font-size: 24px;
+      letter-spacing: .2px;
+    }
+
+    /* Buttons (blue like Route Checker) */
+    .btn{
+      padding: 8px 16px;
+      font-size: 14px;
+      border-radius: 5px;
+      border: none;
+      cursor: pointer;
+      background: #0078d4;
+      color: #fff;
+      font-weight: 700;
+    }
+    .btn:hover{ background: #005ea3; }
+    .btn:disabled{
+      background: #9bbbd7;
+      cursor: not-allowed;
+      opacity: 1;
+    }
+
+    .bar{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:center;
+      margin: 0 0 10px;
+    }
+
+    /* Keep status line for IMPORTANT/non-loading messages */
+    .status{
+      margin: 0 auto 12px;
+      font-size: 13px;
+      color: #333;
+      min-height: 18px;
+    }
+
+    /* ---------- LEGEND ---------- */
+    .legend{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:center;
+      margin: 14px 0 10px;
+      font-size: 13px;
+    }
+    .chip{display:inline-flex;align-items:center;gap:6px}
+    .dot{width:12px;height:12px;border-radius:3px;display:inline-block;border:1px solid #999}
+
+    /* ---------- TABLE WRAP ---------- */
+    .wrap{
+      margin: 0 auto;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      background: #fafafa;
+      padding: 10px;
+      overflow: visible;
+    }
+
+    table{
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      min-width: 0;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    th, td{
+      border: 1px solid #ddd;
+      padding: 6px 8px;
+      text-align: center;
+      vertical-align: middle;
+      height: 44px;
+      font-size: 13px;
+      line-height: 1.25;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      white-space: normal;
+      font-weight: 400;
+    }
+
+    th{
+      background: var(--header);
+      font-weight: 700;
+      font-size: 13px;
+      line-height: 1.15;
+    }
+
+    /* ---------- STICKY HEADER ROW ---------- */
+    thead th{
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      font-size: var(--channelTitleSize);
+      font-weight: var(--channelTitleWeight);
+      padding: 8px 10px;
+      line-height: 1.15;
+    }
+
+    th.routeHead, td.routeCell{
+      width: 260px;
+    }
+
+    th.routeHead{
+      position: sticky;
+      left: 0;
+      z-index: 30;
+      text-align: left;
+      font-size: var(--channelTitleSize);
+      font-weight: var(--channelTitleWeight);
+      padding: 8px 10px;
+      background: var(--header);
+    }
+
+    .routeCell{
+      background: var(--routecol);
+      text-align: left;
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      overflow: visible;
+      font-size: var(--channelTitleSize);
+      font-weight: var(--channelTitleWeight);
+      padding: 8px 10px;
+    }
+
+    .inactive{background: var(--inactive)}
+    .runAvailable{background: var(--green)}
+    .fullWeight{background: var(--red); color:#fff}
+    .fullDrops{background: var(--orange)}
+    .pendingOutline{outline:3px solid #00000022;outline-offset:-3px}
+
+    select{
+      width: 100%;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      appearance: none;
+      text-align: center;
+      text-align-last: center;
+      white-space: normal;
+      word-break: break-word;
+      line-height: 1.2;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 0;
+      color: inherit;
+    }
+    select option{
+      background: var(--inactive);
+      color: #111;
+    }
+    select:focus{outline: 2px solid #00000015; outline-offset: 2px;}
+
+    /* ---------- ROUTE TOOLTIP ---------- */
+    .routeName{
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      cursor: help;
+    }
+    .routeTooltip{
+      position: absolute;
+      left: 0;
+      top: calc(100% + 8px);
+      z-index: 9999;
+
+      min-width: 280px;
+      max-width: 520px;
+
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 10px 12px;
+
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      text-align: left;
+
+      opacity: 0;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition: opacity .12s ease, transform .12s ease;
+
+      font-size: 12px;
+      line-height: 1.4;
+      color: #111;
+
+      white-space: normal;
+      word-break: break-word;
+    }
+    .routeName:hover .routeTooltip{
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .routeTooltipTitle{
+      font-weight: 700;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+    .routeTooltipBody{
+      font-weight: 600;
+      color: #333;
+    }
+
+    /* ---------- TOOLTIP LAYER FIX ---------- */
+    tbody{ position: relative; z-index: 1; }
+    tbody tr:hover{ position: relative; z-index: 50; }
+    td.routeCell:hover{ z-index: 200; }
+    .routeName:hover{ z-index: 300; }
+
+    /* ---------- ROUTE FILTER (top-left header) ---------- */
+    .routeFilterWrap{
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: flex-start;
+      justify-content: center;
+    }
+    .routeFilterTop{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      width:100%;
+    }
+    .routeFilterLabel{
+      font-weight: 800;
+      font-size: var(--channelTitleSize);
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+    .routeFilterSelect{
+      flex: 1;
+      min-width: 0;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid #cfcfcf;
+      background: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      color: #111;
+      appearance: auto;
+      text-align: left;
+      text-align-last: left;
+    }
+    .routeFilterSelect:focus{
+      outline: 2px solid #00000015;
+      outline-offset: 2px;
+    }
+    .routeFilterClear{
+      font-size: 13px;
+      font-weight: 800;
+      color: #0078d4;
+      text-decoration: underline;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .routeFilterClear:hover{ color:#005ea3; }
+    .routeFilterHint{
+      font-size: 12px;
+      font-weight: 600;
+      color: #444;
+    }
+
+    /* ---------- HIDE/SHOW ---------- */
+    .hidden{display:none !important;}
+
+    @media (max-width: 1100px){
+      th, td{font-size: 12px}
+      th{font-size: 12px}
+      select{font-size: 12px}
+      th.routeHead, td.routeCell{width: 210px}
+      .routeTooltip{min-width: 240px; max-width: 360px;}
+      thead th, th.routeHead, td.routeCell{ font-size: 14px; }
+      .routeFilterLabel{ font-size: 14px; }
+    }
+
+    @media (max-width: 600px){
+      .btn{ width: 100%; }
+      .overlayControls{ width: 100%; justify-content: flex-start; }
+      .overlayControls input[type="date"]{ width: 100%; }
+
+      /* keep pills reachable on small screens */
+      .topPill{
+        padding: 6px 9px;
+        font-size: 12.5px;
+      }
+      .archivePill{ left: 12px; }
+      .logoutPill{ right: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LOADING OVERLAY -->
+  <div id="loadingOverlay" class="loading-overlay" aria-live="polite" aria-busy="true">
+    <div class="loading-panel">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="loading-title" id="loadingTitle">Loading…</p>
+      <p class="loading-sub" id="loadingSub">Please wait.</p>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- TOP PILLS -->
+    <div class="topPill archivePill hidden" id="archiveLink" role="button" tabindex="0" aria-label="Open archive">Archive</div>
+    <div class="topPill routesEditorPill hidden" id="routesEditorLink" role="button" tabindex="0" aria-label="Open Routes Editor">Routes Editor</div>
+    <div class="topPill logoutPill hidden" id="logoutLink" role="button" tabindex="0" aria-label="Log out">Log out</div>
+
+    <div class="top">
+      <h1>Route Status Admin</h1>
+      <div class="status" id="status">Ready.</div>
+
+      <div class="bar hidden" id="controls">
+        <button class="btn" id="reloadBtn">Reload</button>
+        <button class="btn" id="discardBtn" disabled>Discard pending</button>
+        <button class="btn" id="saveBtn" disabled>Save changes</button>
+      </div>
+    </div>
+
+    <!-- TOKEN GATE -->
+    <div id="gate" class="gateWrap">
+      <div style="font-size:13px;color:#444;line-height:1.4;text-align:center">
+        Enter the access code to access the route status editor.
+      </div>
+
+      <div class="gateRow">
+        <input id="gateToken" type="password" placeholder="Access code" autocomplete="off" />
+        <button id="proceedBtn" class="btn">Proceed</button>
+      </div>
+
+      <div id="gateMsg" style="margin-top:10px;font-size:13px;color:#333;line-height:1.35;text-align:center">
+        An access code is required each time the page loads.
+      </div>
+    </div>
+
+    <!-- APP UI -->
+    <div id="app" class="hidden">
+      <div class="legend">
+        <span class="chip"><span class="dot" style="background:var(--green)"></span> Available (scheduled run)</span>
+        <span class="chip"><span class="dot" style="background:var(--red)"></span> Full - On Weight</span>
+        <span class="chip"><span class="dot" style="background:var(--orange)"></span> Full - On Drops</span>
+        <span class="chip"><span class="dot" style="background:var(--inactive)"></span> Not a run day</span>
+      </div>
+
+      <div class="wrap">
+        <table id="grid"></table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ARCHIVE OVERLAY -->
+  <div class="overlay hidden" id="archiveOverlay" aria-modal="true" role="dialog">
+    <div class="overlayPanel">
+      <div class="overlayHeader">
+        <div class="overlayTitle">Archive – Route Closures</div>
+
+        <div class="overlayControls">
+          <label for="archiveDate">Select date</label>
+          <input type="date" id="archiveDate" />
+          <button class="btn" id="archiveGoBtn">Proceed</button>
+          <button class="overlayCloseBtn" id="archiveCloseBtn">Close</button>
+        </div>
+      </div>
+
+      <div class="overlayBody">
+        <p class="archiveNote" id="archiveNote">
+          Select a past date to view which routes were marked as <b>Full</b> (Weight / Drops). Routes not listed were not marked as full.
+        </p>
+
+        <div class="legend" style="justify-content:flex-start;margin:0 0 12px">
+          <span class="chip"><span class="dot" style="background:var(--red)"></span> Full - On Weight</span>
+          <span class="chip"><span class="dot" style="background:var(--orange)"></span> Full - On Drops</span>
+        </div>
+
+        <div class="archiveDateHeading hidden" id="archiveHeading"></div>
+
+        <div class="archiveWrap hidden" id="archiveWrap">
+          <table class="archiveTable" id="archiveTable"></table>
+        </div>
+
+        <div id="archiveMsg" style="margin-top:12px;font-size:13px;color:#333"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const CONFIG = {
+      API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
+      ROUTES_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRH6-jQDjHdpThiVhGe1mwrfOD_QRYbYYlCx8Mo1HvA-vLxudRTnpJMRWEZlyxGE-f9OXtnQBGDWoLB/pub?gid=0&single=true&output=csv",
+      BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
+      DAYS_AHEAD: 10,
+
+      // Only use this channel's rows to infer route schedules / postcode groups.
+      // Assumption: schedules are identical across (Component / Jigsaw / etc.)
+      COMPONENT_CHANNEL_NAME: "Component Channel"
+    };
+
+    const STATUS = {
+      AVAILABLE: "Available",
+      FULL_WEIGHT: "Full - On Weight",
+      FULL_DROPS: "Full - On Drops"
+    };
+
+    let sessionToken = "";
+    const pending = new Map();
+    const overrides = new Map();
+    const schedule = new Map();
+    const bankHolidays = new Set();
+    let dateCols = [];
+    const cellByKey = new Map();
+
+    // Tooltip data built per session from routes.csv "prefix" column:
+    const routePostcodeGroups = new Map();
+
+    // Route filter state
+    let currentRouteFilter = ""; // route string, or "" for all
+    let routeFilterSelectEl = null;
+    let routeFilterClearEl = null;
+
+    const gateEl = document.getElementById("gate");
+    const appEl = document.getElementById("app");
+    const controlsEl = document.getElementById("controls");
+
+    const gateTokenEl = document.getElementById("gateToken");
+    const gateMsgEl = document.getElementById("gateMsg");
+    const proceedBtn = document.getElementById("proceedBtn");
+
+    const gridEl = document.getElementById("grid");
+    const statusEl = document.getElementById("status");
+    const saveBtn = document.getElementById("saveBtn");
+    const discardBtn = document.getElementById("discardBtn");
+    const reloadBtn = document.getElementById("reloadBtn");
+
+    // Loading overlay elements
+    const loadingOverlayEl = document.getElementById("loadingOverlay");
+    const loadingTitleEl = document.getElementById("loadingTitle");
+    const loadingSubEl = document.getElementById("loadingSub");
+
+    // Archive elements
+    const archiveLinkEl = document.getElementById("archiveLink");
+    const logoutLinkEl = document.getElementById("logoutLink");
+    const archiveOverlayEl = document.getElementById("archiveOverlay");
+    const archiveDateEl = document.getElementById("archiveDate");
+    const archiveGoBtn = document.getElementById("archiveGoBtn");
+    const archiveCloseBtn = document.getElementById("archiveCloseBtn");
+    const archiveTableEl = document.getElementById("archiveTable");
+    const archiveWrapEl = document.getElementById("archiveWrap");
+    const archiveMsgEl = document.getElementById("archiveMsg");
+    const archiveHeadingEl = document.getElementById("archiveHeading");
+
+    const routesEditorLinkEl = document.getElementById("routesEditorLink");
+
+    // ============================================================
+    // LOADING OVERLAY HELPERS
+    // ============================================================
+    function setLoading(isLoading, title, sub){
+      if (title) loadingTitleEl.textContent = title;
+      if (sub) loadingSubEl.textContent = sub;
+
+      loadingOverlayEl.style.display = isLoading ? "flex" : "none";
+
+      // prevent spamming actions while busy
+      proceedBtn.disabled = isLoading ? true : proceedBtn.disabled;
+      reloadBtn.disabled = isLoading;
+      saveBtn.disabled = isLoading || pending.size === 0;
+      discardBtn.disabled = isLoading || pending.size === 0;
+      gateTokenEl.disabled = isLoading;
+
+      // also avoid overlay interaction while busy
+      archiveGoBtn.disabled = isLoading;
+      archiveCloseBtn.disabled = false;
+      archiveDateEl.disabled = isLoading;
+
+      // also stop logout/archive spam while loading
+      archiveLinkEl.style.pointerEvents = isLoading ? "none" : "";
+      logoutLinkEl.style.pointerEvents = isLoading ? "none" : "";
+      archiveLinkEl.style.opacity = isLoading ? "0.6" : "";
+      logoutLinkEl.style.opacity = isLoading ? "0.6" : "";
+    }
+
+    function setStatus(msg){ statusEl.textContent = msg; }
+    function pad2(n){ return String(n).padStart(2,"0"); }
+    function toISODate(d){ return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+    function addDays(date, days){ const d = new Date(date); d.setDate(d.getDate()+days); return d; }
+    function weekdayLabel(d){ return d.toLocaleDateString("en-GB",{weekday:"short"}); }
+    function displayDate(d){ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${String(d.getFullYear()).slice(-2)}`; }
+    function key(dateISO, route){ return `${dateISO}||${route}`; }
+    function normaliseHeader(h){ return String(h||"").trim().toLowerCase(); }
+    function isISODate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(String(s||"").trim()); }
+    function isWeekend(wd){ return wd === 0 || wd === 6; }
+
+    function updateButtons(){
+      const n = pending.size;
+      // When not loading, normal enable/disable behaviour
+      if (loadingOverlayEl.style.display === "flex"){
+        saveBtn.disabled = true;
+        discardBtn.disabled = true;
+      } else {
+        saveBtn.disabled = (n === 0);
+        discardBtn.disabled = (n === 0);
+      }
+      saveBtn.textContent = (n === 0) ? "Save changes" : `Save changes (${n})`;
+    }
+
+    function truthy(v){
+      const s = String(v||"").trim().toLowerCase();
+      return !!(s && s !== "0" && s !== "no" && s !== "false" && s !== "n");
+    }
+
+    function weekdayIndexFromName(name){
+      const n = String(name||"").trim().toLowerCase();
+      const map = {
+        "sun":0,"sunday":0,
+        "mon":1,"monday":1,
+        "tue":2,"tues":2,"tuesday":2,
+        "wed":3,"wednesday":3,
+        "thu":4,"thur":4,"thurs":4,"thursday":4,
+        "fri":5,"friday":5,
+        "sat":6,"saturday":6
+      };
+      return (n in map) ? map[n] : null;
+    }
+
+    function parseDeliveryDaysString(s){
+      const out = new Set();
+      const raw = String(s||"").trim();
+      if (!raw) return out;
+      const parts = raw.split(/[^A-Za-z]+/).filter(Boolean);
+      for (const p of parts){
+        const idx = weekdayIndexFromName(p);
+        if (idx !== null) out.add(idx);
+      }
+      return out;
+    }
+
+    function setToSortedArray(s){ return Array.from(s || []).sort((a,b)=>a-b); }
+
+    function setsEqual(a, b){
+      if (!a || !b) return false;
+      if (a.size !== b.size) return false;
+      for (const v of a) if (!b.has(v)) return false;
+      return true;
+    }
+
+    function weekdaysToText(daysSet){
+      const names = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+      return setToSortedArray(daysSet).map(i => names[i]).join("|");
+    }
+
+    function stripBom(s) {
+      return s && s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s;
+    }
+
+    function detectDelimiterFromText(text){
+      const cleaned = stripBom(String(text || ""));
+      const firstLine = cleaned.split(/\r?\n/).find(l => l.trim() !== "") || "";
+      return firstLine.includes("\t") ? "\t" : ",";
+    }
+
+    // TSV parser (simple) – assumes no quoted tabs (your files don’t use quoted TSV)
+    function parseTSV(text){
+      const cleaned = stripBom(String(text || ""));
+      const lines = cleaned.split(/\r?\n/).filter(l => l.trim() !== "");
+      return lines.map(line => line.split("\t").map(c => String(c || "").trim()));
+    }
+
+    // Unified: if TSV -> parseTSV, else -> existing parseCSV (quoted CSV supported)
+    function parseDelimitedSmart(text){
+      const delim = detectDelimiterFromText(text);
+      if (delim === "\t") return parseTSV(text);
+      return parseCSV(text); // your existing quoted CSV parser
+    }
+
+    function parseCSV(text){
+      const rows = [];
+      let cur = [];
+      let val = "";
+      let inQuotes = false;
+
+      for (let i=0;i<text.length;i++){
+        const ch = text[i];
+        const next = text[i+1];
+
+        if (ch === '"' && inQuotes && next === '"'){ val+='"'; i++; continue; }
+        if (ch === '"'){ inQuotes = !inQuotes; continue; }
+        if (ch === "," && !inQuotes){ cur.push(val); val=""; continue; }
+
+        if ((ch === "\n" || ch === "\r") && !inQuotes){
+          if (val.length || cur.length){
+            cur.push(val);
+            rows.push(cur.map(c => c.trim()));
+          }
+          val=""; cur=[];
+          if (ch === "\r" && next === "\n") i++;
+          continue;
+        }
+
+        val += ch;
+      }
+
+      if (val.length || cur.length){
+        cur.push(val);
+        rows.push(cur.map(c => c.trim()));
+      }
+
+      return rows.filter(r => r.some(c => c !== ""));
+    }
+
+    function routeRunsOn(route, weekdayIndex){
+      const days = schedule.get(route);
+      return days ? days.has(weekdayIndex) : false;
+    }
+
+    function getEffectiveStatus(dateISO, route){
+      const k = key(dateISO, route);
+      if (pending.has(k)) return pending.get(k).status;
+      if (overrides.has(k)) return overrides.get(k);
+      return STATUS.AVAILABLE;
+    }
+
+    function applyCellStyle(td, dateISO, route){
+      td.classList.remove("inactive","runAvailable","fullWeight","fullDrops","pendingOutline");
+
+      const col = dateCols.find(c => c.iso === dateISO);
+      const runs = col ? routeRunsOn(route, col.weekday) : false;
+
+      if (!runs){
+        td.classList.add("inactive");
+        td.textContent = "";
+        return;
+      }
+
+      const st = getEffectiveStatus(dateISO, route);
+      if (st === STATUS.FULL_WEIGHT) td.classList.add("fullWeight");
+      else if (st === STATUS.FULL_DROPS) td.classList.add("fullDrops");
+      else td.classList.add("runAvailable");
+
+      if (pending.has(key(dateISO, route))) td.classList.add("pendingOutline");
+    }
+
+    function setSelectValueInCell(td, value){
+      const sel = td.querySelector("select");
+      if (sel) sel.value = value;
+    }
+
+    // ---------- Prefix grouping helpers (from routes.csv "prefix" column) ----------
+    function normaliseDistrictToken(token){
+      const t = String(token || "").trim().toUpperCase();
+      const m = t.match(/^([A-Z]{1,2})\s*0*(\d{1,2})([A-Z]?)$/);
+      if (!m) return null;
+      const area = m[1];
+      const num = parseInt(m[2], 10);
+      const suffix = m[3] || "";
+      if (!Number.isFinite(num)) return null;
+      return { area, num, suffix, raw: `${area}${num}${suffix}` };
+    }
+
+    function extractDistrictsFromPrefixCell(cell){
+      const text = String(cell || "").toUpperCase();
+      const matches = text.match(/[A-Z]{1,2}\s*0*\d{1,2}[A-Z]?/g) || [];
+      const out = [];
+      for (const m of matches){
+        const d = normaliseDistrictToken(m.replace(/\s+/g,""));
+        if (d) out.push(d);
+      }
+      return out;
+    }
+
+    function groupDistrictsToRanges(districts){
+      const byAreaNums = new Map();
+      const suffixTokens = new Map();
+
+      for (const d of districts){
+        if (!d) continue;
+        if (d.suffix){
+          if (!suffixTokens.has(d.area)) suffixTokens.set(d.area, new Set());
+          suffixTokens.get(d.area).add(d.raw);
+          continue;
+        }
+        if (!byAreaNums.has(d.area)) byAreaNums.set(d.area, new Set());
+        byAreaNums.get(d.area).add(d.num);
+      }
+
+      const parts = [];
+      const areas = Array.from(new Set([...byAreaNums.keys(), ...suffixTokens.keys()]))
+        .sort((a,b)=>a.localeCompare(b,"en-GB"));
+
+      for (const area of areas){
+        const numsSet = byAreaNums.get(area) || new Set();
+        const nums = Array.from(numsSet).sort((a,b)=>a-b);
+
+        if (nums.length){
+          let start = nums[0], prev = nums[0];
+          for (let i=1;i<nums.length;i++){
+            const n = nums[i];
+            if (n === prev + 1){ prev = n; continue; }
+            parts.push(start === prev ? `${area}${start}` : `${area}${start}–${area}${prev}`);
+            start = prev = n;
+          }
+          parts.push(start === prev ? `${area}${start}` : `${area}${start}–${area}${prev}`);
+        }
+
+        const sufSet = suffixTokens.get(area);
+        if (sufSet && sufSet.size){
+          const suf = Array.from(sufSet).sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true}));
+          for (const t of suf) parts.push(t);
+        }
+      }
+
+      const cleaned = parts.map(p => p.replace(/^([A-Z]{1,2}\d+)–\1([A-Z]{1,2})(\d+)$/, "$1–$2$3"));
+      return cleaned.join("; ");
+    }
+
+    // ---------- API Token validation ----------
+    async function validateToken(token){
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const iso = toISODate(today);
+
+      const payload = JSON.stringify({
+        action: "batch",
+        token,
+        changes: [{ date: iso, route: "__TOKEN_CHECK__", status: STATUS.AVAILABLE }]
+      });
+
+      const res = await fetch(CONFIG.API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: payload
+      });
+
+      const data = await res.json().catch(()=>null);
+      return !!(data && data.ok);
+    }
+
+    // ---------- Load bank holidays ----------
+    async function loadBankHolidays(){
+      bankHolidays.clear();
+      const res = await fetch(CONFIG.BANK_HOLIDAYS_CSV_URL, { cache:"no-store" });
+      if (!res.ok) return;
+
+      const text = await res.text();
+      const rows = parseDelimitedSmart(text);
+      if (!rows.length) return;
+
+      let startRow = 0;
+      let dateIdx = 0;
+
+      const maybeHeaders = rows[0].map(normaliseHeader);
+      const idx = maybeHeaders.findIndex(h => h === "date" || h === "bankholiday" || h === "bank holiday" || h === "bank_holiday");
+      if (idx !== -1){ startRow = 1; dateIdx = idx; }
+
+      for (let r=startRow; r<rows.length; r++){
+        const d = String(rows[r][dateIdx] || "").trim();
+        if (isISODate(d)) bankHolidays.add(d);
+      }
+    }
+
+    // ---------- Build next N working-day columns ----------
+    function buildDateCols(){
+      const start = new Date();
+      start.setHours(0,0,0,0);
+
+      dateCols = [];
+      let i = 0;
+
+      while (dateCols.length < CONFIG.DAYS_AHEAD && i < 730){
+        const d = addDays(start, i);
+        const iso = toISODate(d);
+        const wd = d.getDay();
+
+        if (!isWeekend(wd) && !bankHolidays.has(iso)){
+          dateCols.push({ date:d, iso, weekday:wd });
+        }
+        i++;
+      }
+    }
+
+    // ---------- Load schedule & build tooltip groups from routes.csv ----------
+    async function loadScheduleFromCSV(){
+      const res = await fetch(
+  CONFIG.ROUTES_CSV_URL + (CONFIG.ROUTES_CSV_URL.includes("?") ? "&" : "?") + "cb=" + Date.now(),
+  { cache:"no-store" }
+);
+      if (!res.ok) throw new Error(`Failed to load Routes sheet (${res.status})`);
+
+      const text = await res.text();
+      const rows = parseDelimitedSmart(text);
+      if (rows.length < 2) throw new Error("Routes sheet has no data rows");
+
+      const headers = rows[0].map(normaliseHeader);
+
+      const routeIdx = headers.findIndex(h =>
+        h === "route" || h === "routename" || h === "route name" || h === "routecode" || h === "route_code"
+      );
+      if (routeIdx === -1) throw new Error("Routes sheet must include a 'Route' column");
+
+      const prefixIdx = headers.findIndex(h => h === "prefix");
+      if (prefixIdx === -1) throw new Error("Routes sheet must include a 'prefix' column (postcode prefix/district).");
+
+      const channelIdx = headers.findIndex(h => h === "channel" || h === "routechannel");
+      if (channelIdx === -1) throw new Error("Routes sheet must include a 'channel' column.");
+
+      const dayCols = new Map();
+      headers.forEach((h,i)=>{
+        const idx = weekdayIndexFromName(h);
+        if (idx !== null) dayCols.set(idx, i);
+      });
+
+      const deliveryDaysIdx = headers.findIndex(h =>
+        h === "deliverydays" || h === "delivery days" || h === "days" || h === "run days" || h === "rundays"
+      );
+
+      schedule.clear();
+      routePostcodeGroups.clear();
+
+      const routeDistricts = new Map();
+      const targetChannel = String(CONFIG.COMPONENT_CHANNEL_NAME || "").trim().toLowerCase();
+
+      for (let r=1; r<rows.length; r++){
+        const row = rows[r];
+
+        const channel = String(row[channelIdx] || "").trim().toLowerCase();
+        if (targetChannel && channel !== targetChannel) continue;
+
+        const route = String(row[routeIdx] || "").trim();
+        if (!route) continue;
+
+        if (route.toUpperCase().startsWith("3PLCO")) continue;
+        if (route.length <= 5) continue;
+
+        let days = new Set();
+        if (dayCols.size >= 5){
+          for (const [w,col] of dayCols.entries()){
+            if (truthy(row[col])) days.add(w);
+          }
+        } else if (deliveryDaysIdx !== -1){
+          days = parseDeliveryDaysString(row[deliveryDaysIdx]);
+        } else {
+          continue;
+        }
+
+        if (days.size){
+          if (!schedule.has(route)){
+            schedule.set(route, days);
+          } else {
+            const existing = schedule.get(route);
+            if (!setsEqual(existing, days)){
+              console.warn(
+                `[Routes sheet] Conflicting schedules for route "${route}" on row ${r+1}. Keeping first.`,
+                { existing: weekdaysToText(existing), incoming: weekdaysToText(days), row: row }
+              );
+              // Keep existing schedule
+            }
+          }
+        }
+
+        const prefixCell = row[prefixIdx];
+        if (!routeDistricts.has(route)) routeDistricts.set(route, []);
+        routeDistricts.get(route).push(...extractDistrictsFromPrefixCell(prefixCell));
+      }
+
+      if (schedule.size === 0){
+        throw new Error(
+          `No route schedules inferred from Routes sheet for channel "${CONFIG.COMPONENT_CHANNEL_NAME}".`
+        );
+      }
+
+      for (const [route, districts] of routeDistricts.entries()){
+        const grouped = groupDistrictsToRanges(districts);
+        routePostcodeGroups.set(route, grouped);
+      }
+    }
+
+    // ---------- Load overrides from API ----------
+    async function loadOverrides(fromISO, toISO){
+      overrides.clear();
+      const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`;
+      const res = await fetch(url, { cache:"no-store" });
+      const data = await res.json().catch(()=>null);
+      if (!data || !data.ok) throw new Error(`API failed: ${(data && data.error) ? data.error : "Unknown error"}`);
+
+      for (const row of (data.rows || [])){
+        const date = String(row.date || "").trim();
+        const route = String(row.route || "").trim();
+        const status = String(row.status || "").trim();
+        if (!date || !route || !status) continue;
+        overrides.set(key(date, route), status);
+      }
+    }
+
+    // ---------- Route filter apply ----------
+    function applyRouteFilter(){
+      const tbody = gridEl.querySelector("tbody");
+      if (!tbody) return;
+
+      const filter = String(currentRouteFilter || "").trim();
+      const rows = tbody.querySelectorAll("tr");
+
+      rows.forEach(tr => {
+        const r = tr.dataset.route || "";
+        tr.style.display = (!filter || r === filter) ? "" : "none";
+      });
+
+      if (routeFilterClearEl){
+        routeFilterClearEl.classList.toggle("hidden", !filter);
+      }
+    }
+
+    function setRouteFilter(route){
+      currentRouteFilter = String(route || "").trim();
+      if (routeFilterSelectEl){
+        routeFilterSelectEl.value = currentRouteFilter;
+      }
+      applyRouteFilter();
+      if (currentRouteFilter){
+        setStatus(`Filtered to: ${currentRouteFilter}`);
+      } else {
+        setStatus("Filter cleared.");
+      }
+    }
+
+    // ---------- Build grid ----------
+    function buildGrid(){
+      gridEl.innerHTML = "";
+      cellByKey.clear();
+
+      const routes = Array.from(schedule.keys())
+        .sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
+
+      const thead = document.createElement("thead");
+      const hr = document.createElement("tr");
+
+      // Top-left header becomes a filter control
+      const thRoute = document.createElement("th");
+      thRoute.className = "routeHead";
+
+      const filterWrap = document.createElement("div");
+      filterWrap.className = "routeFilterWrap";
+
+      const topRow = document.createElement("div");
+      topRow.className = "routeFilterTop";
+
+      const label = document.createElement("div");
+      label.className = "routeFilterLabel";
+      label.textContent = "Route";
+
+      const sel = document.createElement("select");
+      sel.className = "routeFilterSelect";
+      sel.setAttribute("aria-label", "Filter route");
+      sel.innerHTML = `<option value="">All routes</option>` + routes.map(r => `<option value="${escapeHTMLAttr(r)}">${escapeHTML(r)}</option>`).join("");
+
+      const clear = document.createElement("span");
+      clear.className = "routeFilterClear hidden";
+      clear.textContent = "Clear";
+      clear.title = "Clear route filter";
+
+      topRow.appendChild(label);
+      topRow.appendChild(sel);
+      topRow.appendChild(clear);
+
+      const hint = document.createElement("div");
+      hint.className = "routeFilterHint";
+      hint.textContent = "Filter to a single route";
+
+      filterWrap.appendChild(topRow);
+      filterWrap.appendChild(hint);
+      thRoute.appendChild(filterWrap);
+      hr.appendChild(thRoute);
+
+      // Wire up references for later
+      routeFilterSelectEl = sel;
+      routeFilterClearEl = clear;
+
+      sel.addEventListener("change", () => {
+        setRouteFilter(sel.value);
+      });
+
+      clear.addEventListener("click", () => {
+        setRouteFilter("");
+      });
+
+      for (const c of dateCols){
+        const th = document.createElement("th");
+        th.innerHTML = `${weekdayLabel(c.date)}<br>${displayDate(c.date)}`;
+        hr.appendChild(th);
+      }
+
+      thead.appendChild(hr);
+      gridEl.appendChild(thead);
+
+      const tbody = document.createElement("tbody");
+
+      for (const route of routes){
+        const tr = document.createElement("tr");
+        tr.dataset.route = route;
+
+        const tdRoute = document.createElement("td");
+        tdRoute.className = "routeCell";
+
+        const wrap = document.createElement("span");
+        wrap.className = "routeName";
+        wrap.textContent = route;
+
+        const tooltip = document.createElement("div");
+        tooltip.className = "routeTooltip";
+
+        const title = document.createElement("div");
+        title.className = "routeTooltipTitle";
+        title.textContent = "Postcode groups";
+
+        const body = document.createElement("div");
+        body.className = "routeTooltipBody";
+        const groups = routePostcodeGroups.get(route) || "";
+        body.textContent = groups ? groups : "No postcode groups found for this route.";
+
+        tooltip.appendChild(title);
+        tooltip.appendChild(body);
+        wrap.appendChild(tooltip);
+        tdRoute.appendChild(wrap);
+
+        tr.appendChild(tdRoute);
+
+        for (const c of dateCols){
+          const td = document.createElement("td");
+          const runs = routeRunsOn(route, c.weekday);
+
+          if (!runs){
+            td.className = "inactive";
+            td.textContent = "";
+          } else {
+            const sel = document.createElement("select");
+            sel.innerHTML = `
+              <option value="${STATUS.AVAILABLE}">${STATUS.AVAILABLE}</option>
+              <option value="${STATUS.FULL_WEIGHT}">${STATUS.FULL_WEIGHT}</option>
+              <option value="${STATUS.FULL_DROPS}">${STATUS.FULL_DROPS}</option>
+            `;
+
+            const k = key(c.iso, route);
+            sel.value = overrides.get(k) || STATUS.AVAILABLE;
+
+            sel.addEventListener("change", () => {
+              pending.set(k, { date: c.iso, route, status: sel.value });
+              updateButtons();
+              applyCellStyle(td, c.iso, route);
+
+              // Keep this (important) message in the status bar
+              setStatus(`Pending: ${route} on ${c.iso} --> ${sel.value}`);
+            });
+
+            td.appendChild(sel);
+            applyCellStyle(td, c.iso, route);
+            cellByKey.set(k, td);
+          }
+
+          tr.appendChild(td);
+        }
+
+        tbody.appendChild(tr);
+      }
+
+      gridEl.appendChild(tbody);
+
+      // Re-apply filter after rebuild (e.g. reload)
+      if (currentRouteFilter && !routes.includes(currentRouteFilter)){
+        currentRouteFilter = "";
+      }
+      if (routeFilterSelectEl){
+        routeFilterSelectEl.value = currentRouteFilter;
+      }
+      applyRouteFilter();
+    }
+
+    function discardPending(){
+      pending.clear();
+      updateButtons();
+
+      for (const [k, td] of cellByKey.entries()){
+        const [dateISO, route] = k.split("||");
+        const st = overrides.get(k) || STATUS.AVAILABLE;
+        setSelectValueInCell(td, st);
+        applyCellStyle(td, dateISO, route);
+      }
+
+      setStatus("Pending changes discarded.");
+    }
+
+    async function savePending(){
+      if (pending.size === 0) return;
+
+      const changes = Array.from(pending.values());
+
+      // Spinner instead of noisy status messages
+      setLoading(true, "Saving changes…", `Saving ${changes.length} update(s).`);
+
+      const payload = JSON.stringify({
+        action: "batch",
+        token: sessionToken,
+        changes
+      });
+
+      try{
+        const res = await fetch(CONFIG.API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: payload
+        });
+
+        const data = await res.json().catch(()=>null);
+        if (!data || !data.ok){
+          setLoading(false);
+          setStatus(`Save failed: ${(data && data.error) ? data.error : "Unknown error"}`);
+          return;
+        }
+
+        pending.clear();
+        updateButtons();
+
+        setLoading(true, "Refreshing…", "Updating live data.");
+        await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
+
+        for (const [k, td] of cellByKey.entries()){
+          const [dateISO, route] = k.split("||");
+          const st = overrides.get(k) || STATUS.AVAILABLE;
+          setSelectValueInCell(td, st);
+          applyCellStyle(td, dateISO, route);
+        }
+
+        setLoading(false);
+        setStatus("Saved.");
+      }catch(err){
+        setLoading(false);
+        setStatus(`Save failed: ${String(err.message || err)}`);
+        console.error(err);
+      }
+    }
+
+    async function fullReload(){
+      try{
+        // Spinner instead of "Loading..." text spam
+        setLoading(true, "Loading…", "Fetching schedule and live status.");
+
+        pending.clear();
+        updateButtons();
+
+        await loadBankHolidays();
+        buildDateCols();
+
+        await loadScheduleFromCSV();
+        await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
+
+        buildGrid();
+
+        // Archive date selector: only allow dates BEFORE the live window
+        const earliestLive = dateCols.length ? dateCols[0].iso : "";
+        if (earliestLive){
+          const d = new Date(earliestLive + "T00:00:00");
+          d.setDate(d.getDate() - 1);
+          archiveDateEl.max = toISODate(d);
+        }
+
+        setLoading(false);
+        setStatus("Ready.");
+      }catch(err){
+        setLoading(false);
+        setStatus(`Error: ${String(err.message || err)}`);
+        console.error(err);
+      }
+    }
+
+    // ---------- LOG OUT ----------
+    function logout(){
+      if (loadingOverlayEl.style.display === "flex") return;
+
+      if (pending.size > 0){
+        const ok = confirm(`You have ${pending.size} pending change(s). Log out and lose them?`);
+        if (!ok) return;
+      }
+
+      // Close archive if open
+      closeArchive();
+
+      // Clear session + state
+      sessionToken = "";
+      pending.clear();
+      overrides.clear();
+      schedule.clear();
+      bankHolidays.clear();
+      dateCols = [];
+      cellByKey.clear();
+      currentRouteFilter = "";
+      routeFilterSelectEl = null;
+      routeFilterClearEl = null;
+      gridEl.innerHTML = "";
+
+      // Hide app, show gate
+      appEl.classList.add("hidden");
+      controlsEl.classList.add("hidden");
+      archiveLinkEl.classList.add("hidden");
+      routesEditorLinkEl.classList.add("hidden");
+      logoutLinkEl.classList.add("hidden");
+      gateEl.classList.remove("hidden");
+
+      // Reset UI text
+      proceedBtn.disabled = false;
+      gateTokenEl.disabled = false;
+      gateTokenEl.value = "";
+      gateMsgEl.textContent = "An access code is required each time the page loads.";
+      setStatus("Ready.");
+
+      // Put cursor back where they need it
+      gateTokenEl.focus();
+    }
+
+    async function proceed(){
+      const token = (gateTokenEl.value || "").trim();
+      if (!token){
+        gateMsgEl.textContent = "Please enter the admin token.";
+        return;
+      }
+
+      proceedBtn.disabled = true;
+
+      // Spinner instead of "Checking access code... / Please wait..."
+      setLoading(true, "Checking access…", "Verifying access code.");
+
+      try{
+        const ok = await validateToken(token);
+
+        if (!ok){
+          setLoading(false);
+          proceedBtn.disabled = false;
+          gateMsgEl.textContent = "Access code incorrect. Please try again.";
+          setStatus("Invalid access code.");
+          gateTokenEl.focus();
+          return;
+        }
+
+        sessionToken = token;
+
+        gateEl.classList.add("hidden");
+        appEl.classList.remove("hidden");
+        controlsEl.classList.remove("hidden");
+        archiveLinkEl.classList.remove("hidden");
+        routesEditorLinkEl.classList.remove("hidden");
+        logoutLinkEl.classList.remove("hidden");
+
+        // Keep spinner while we load everything
+        setLoading(true, "Loading admin grid…", "Fetching routes and live status.");
+        await fullReload(); // fullReload will hide spinner itself on success/fail
+      }catch(err){
+        setLoading(false);
+        proceedBtn.disabled = false;
+        setStatus(`Error: ${String(err.message || err)}`);
+        console.error(err);
+      }
+    }
+
+    // ---------- ARCHIVE ----------
+    function openArchive(){
+      archiveOverlayEl.classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+
+      archiveMsgEl.textContent = "";
+      archiveHeadingEl.classList.add("hidden");
+      archiveWrapEl.classList.add("hidden");
+      archiveTableEl.innerHTML = "";
+
+      const max = archiveDateEl.max || "";
+      if (max){
+        archiveDateEl.value = max;
+      } else {
+        const d = new Date();
+        d.setDate(d.getDate()-1);
+        archiveDateEl.value = toISODate(d);
+      }
+
+      archiveDateEl.focus();
+    }
+
+    function closeArchive(){
+      archiveOverlayEl.classList.add("hidden");
+      document.body.style.overflow = "";
+    }
+
+    function openRoutesEditor(){
+      window.open("https://rokib-tkc.github.io/transport-route-checker/routes-editor.html", "_blank", "noopener");
+      }
+
+    routesEditorLinkEl.addEventListener("click", openRoutesEditor);
+    routesEditorLinkEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") openRoutesEditor();
+    });
+
+
+    function statusPillHTML(status){
+      if (status === STATUS.FULL_WEIGHT) return `<span class="pill pillWeight">${STATUS.FULL_WEIGHT}</span>`;
+      if (status === STATUS.FULL_DROPS) return `<span class="pill pillDrops">${STATUS.FULL_DROPS}</span>`;
+      return `<span class="pill">${status}</span>`;
+    }
+
+    async function loadArchiveForDate(dateISO){
+      // Spinner for archive load too (removes "Loading..." spam)
+      setLoading(true, "Loading archive…", "Fetching saved closures for the selected date.");
+
+      archiveMsgEl.textContent = "";
+      archiveHeadingEl.classList.add("hidden");
+      archiveWrapEl.classList.add("hidden");
+      archiveTableEl.innerHTML = "";
+
+      if (!isISODate(dateISO)){
+        setLoading(false);
+        archiveMsgEl.textContent = "Please select a valid date.";
+        return;
+      }
+
+      const earliestLive = dateCols.length ? dateCols[0].iso : null;
+      if (earliestLive && dateISO >= earliestLive){
+        setLoading(false);
+        archiveMsgEl.textContent = "Please select a date that is not in the current Live view.";
+        return;
+      }
+
+      try{
+        const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(dateISO)}&to=${encodeURIComponent(dateISO)}`;
+        const res = await fetch(url, { cache:"no-store" });
+        const data = await res.json().catch(()=>null);
+        if (!data || !data.ok) throw new Error((data && data.error) ? data.error : "API error");
+
+        const rows = (data.rows || [])
+          .map(r => ({
+            route: String(r.route || "").trim(),
+            status: String(r.status || "").trim()
+          }))
+          .filter(r => r.route && (r.status === STATUS.FULL_WEIGHT || r.status === STATUS.FULL_DROPS))
+          .sort((a,b)=>a.route.localeCompare(b.route,"en-GB",{numeric:true,sensitivity:"base"}));
+
+        const display = (() => {
+          const d = new Date(dateISO + "T00:00:00");
+          return d.toLocaleDateString("en-GB",{ weekday:"long", year:"numeric", month:"long", day:"numeric" });
+        })();
+
+        archiveHeadingEl.textContent = `Route closures for ${display}`;
+        archiveHeadingEl.classList.remove("hidden");
+
+        let html = `
+          <thead>
+            <tr>
+              <th style="width:70%">Route</th>
+              <th style="width:30%">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+        `;
+
+        if (!rows.length){
+          html += `
+            <tr>
+              <td colspan="2" style="text-align:left;padding:14px 12px;background:#fff">
+                No routes were marked as <b>Full</b> on this date.
+              </td>
+            </tr>
+          `;
+        } else {
+          for (const r of rows){
+            html += `
+              <tr>
+                <td>${escapeHTML(r.route)}</td>
+                <td style="text-align:left">${statusPillHTML(r.status)}</td>
+              </tr>
+            `;
+          }
+        }
+
+        html += `</tbody>`;
+        archiveTableEl.innerHTML = html;
+        archiveWrapEl.classList.remove("hidden");
+
+        setLoading(false);
+      }catch(err){
+        setLoading(false);
+        archiveMsgEl.textContent = `Error: ${String(err.message || err)}`;
+        console.error(err);
+      }
+    }
+
+    function escapeHTML(s){
+      return String(s ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+    function escapeHTMLAttr(s){
+      return escapeHTML(String(s ?? "")).replaceAll("\n"," ").replaceAll("\r"," ");
+    }
+
+    // ---------- EVENTS ----------
+    proceedBtn.addEventListener("click", proceed);
+    gateTokenEl.addEventListener("keydown", (e) => { if (e.key === "Enter") proceed(); });
+
+    reloadBtn.addEventListener("click", () => {
+      // Reload spinner handled inside fullReload
+      fullReload();
+    });
+
+    discardBtn.addEventListener("click", discardPending);
+
+    saveBtn.addEventListener("click", () => {
+      // Save spinner handled inside savePending
+      savePending();
+    });
+
+    // Archive pill click + keyboard accessibility
+    archiveLinkEl.addEventListener("click", openArchive);
+    archiveLinkEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") openArchive();
+    });
+
+    // Log out pill click + keyboard accessibility
+    logoutLinkEl.addEventListener("click", logout);
+    logoutLinkEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") logout();
+    });
+
+    // Archive overlay controls
+    archiveCloseBtn.addEventListener("click", closeArchive);
+
+    archiveGoBtn.addEventListener("click", () => {
+      const d = (archiveDateEl.value || "").trim();
+      loadArchiveForDate(d);
+    });
+
+    archiveDateEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter"){
+        const d = (archiveDateEl.value || "").trim();
+        loadArchiveForDate(d);
+      }
+      if (e.key === "Escape") closeArchive();
+    });
+
+    archiveOverlayEl.addEventListener("click", (e) => {
+      if (e.target === archiveOverlayEl) closeArchive();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (!archiveOverlayEl.classList.contains("hidden") && e.key === "Escape"){
+        closeArchive();
+      }
+    });
+
+    window.addEventListener("beforeunload", (e) => {
+      if (pending.size > 0){
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    });
+  </script>
+</body>
+</html>
+
+
+
+
+
