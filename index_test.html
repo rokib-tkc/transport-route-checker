@@ -811,6 +811,25 @@ function isBankHolScheduleDateISO(iso){
   return bankHolScheduleDateSet.has(String(iso || "").trim());
 }
 
+function normaliseScheduleDateToISO(value){
+  const s = String(value || "").trim();
+  if (!s) return "";
+
+  // Already ISO: 2026-05-05
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // UK format: 05/05/2026
+  const uk = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (uk){
+    const dd = uk[1].padStart(2, "0");
+    const mm = uk[2].padStart(2, "0");
+    const yyyy = uk[3];
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  return "";
+}
+
 function loadBankHolScheduleDates() {
   return fetch(CONFIG.BANK_HOL_SCHEDULE_DATES_CSV_URL + "?cb=" + Date.now())
     .then(r => {
@@ -822,11 +841,13 @@ function loadBankHolScheduleDates() {
       const set = new Set();
 
       parsed.rows.forEach(row => {
-        const d = String(row.date || row.Date || "").trim();
-        if (d) set.add(d);
+        const rawDate = row.date || row.Date || "";
+        const iso = normaliseScheduleDateToISO(rawDate);
+        if (iso) set.add(iso);
       });
 
       bankHolScheduleDateSet = set;
+      console.log("Bank holiday schedule dates loaded:", Array.from(bankHolScheduleDateSet));
     })
     .catch(err => {
       console.warn("Bank holiday schedule dates not loaded. Using normal routes only:", err);
@@ -894,12 +915,19 @@ async function getBankHolRouteRows(){
 async function getRowsForDateCols(dateCols){
   await bankHolScheduleReady;
 
-  const needsBankHolRoutes = dateCols.some(c => isBankHolScheduleDateISO(c.iso));
-
   const standardRows = await getStandardRouteRows();
-  const bankHolRows = needsBankHolRoutes ? await getBankHolRouteRows() : null;
 
-  return { standardRows, bankHolRows, needsBankHolRoutes };
+  // Load bank_hol_routes.csv if the schedule-date file contains any dates.
+  // It will still only be USED on matching dates.
+  const bankHolRows = bankHolScheduleDateSet.size
+    ? await getBankHolRouteRows()
+    : null;
+
+  return {
+    standardRows,
+    bankHolRows,
+    needsBankHolRoutes: !!bankHolRows
+  };
 }
 
 function rowsForDate(sourceBundle, dateISO){
