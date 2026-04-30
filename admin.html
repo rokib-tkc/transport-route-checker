@@ -677,7 +677,11 @@
     const CONFIG = {
       API_URL: "https://script.google.com/macros/s/AKfycbz4A-9fYDa5hbzvP_LxCka1Mwxfg8MYQj4lwKx1oPFRWBC2PX71z64neOFmpBgjDD8oAw/exec",
       ROUTES_CSV_URL: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRH6-jQDjHdpThiVhGe1mwrfOD_QRYbYYlCx8Mo1HvA-vLxudRTnpJMRWEZlyxGE-f9OXtnQBGDWoLB/pub?gid=0&single=true&output=csv",
-      BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
+
+BANK_HOL_ROUTES_CSV_URL: "./bank_hol_routes.csv",
+BANK_HOL_SCHEDULE_DATES_CSV_URL: "./bank_hol_schedule_dates.csv",
+
+BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
       DAYS_AHEAD: 10,
 
       // Only use this channel's rows to infer route schedules / postcode groups.
@@ -694,7 +698,9 @@
     let sessionToken = "";
     const pending = new Map();
     const overrides = new Map();
-    const schedule = new Map();
+    const scheduleStandard = new Map();
+    const scheduleBankHol = new Map();
+    const bankHolScheduleDates = new Set();
     const bankHolidays = new Set();
     let dateCols = [];
     const cellByKey = new Map();
@@ -896,10 +902,11 @@
       return rows.filter(r => r.some(c => c !== ""));
     }
 
-    function routeRunsOn(route, weekdayIndex){
-      const days = schedule.get(route);
-      return days ? days.has(weekdayIndex) : false;
-    }
+   function routeRunsOn(route, weekdayIndex, dateISO){
+  const activeSchedule = getScheduleForDate(dateISO);
+  const days = activeSchedule.get(route);
+  return days ? days.has(weekdayIndex) : false;
+}
 
     function getEffectiveStatus(dateISO, route){
       const k = key(dateISO, route);
@@ -912,7 +919,7 @@
       td.classList.remove("inactive","runAvailable","fullWeight","fullDrops","pendingOutline");
 
       const col = dateCols.find(c => c.iso === dateISO);
-      const runs = col ? routeRunsOn(route, col.weekday) : false;
+      const runs = col ? routeRunsOn(route, col.weekday, dateISO) : false;
 
       if (!runs){
         td.classList.add("inactive");
@@ -1046,6 +1053,64 @@
       }
     }
 
+
+//-------------build schedules---------------------
+
+    function normaliseScheduleDateToISO(value){
+  const s = String(value || "").trim();
+  if (!s) return "";
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m){
+    return `${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;
+  }
+
+  m = s.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  if (m){
+    return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  }
+
+  return "";
+}
+
+function isBankHolScheduleDate(dateISO){
+  return bankHolScheduleDates.has(String(dateISO || "").trim());
+}
+
+async function loadBankHolScheduleDates(){
+  bankHolScheduleDates.clear();
+
+  const res = await fetch(CONFIG.BANK_HOL_SCHEDULE_DATES_CSV_URL + "?cb=" + Date.now(), { cache:"no-store" });
+  if (!res.ok) return;
+
+  const text = await res.text();
+  const rows = parseDelimitedSmart(text);
+  if (!rows.length) return;
+
+  const headers = rows[0].map(normaliseHeader);
+  const dateIdx = headers.findIndex(h => h === "date");
+
+  const startRow = dateIdx === -1 ? 0 : 1;
+  const idx = dateIdx === -1 ? 0 : dateIdx;
+
+  for (let r = startRow; r < rows.length; r++){
+    const iso = normaliseScheduleDateToISO(rows[r][idx]);
+    if (iso) bankHolScheduleDates.add(iso);
+  }
+
+  console.log("Bank holiday schedule dates loaded:", Array.from(bankHolScheduleDates));
+}
+
+function getScheduleForDate(dateISO){
+  if (isBankHolScheduleDate(dateISO) && scheduleBankHol.size){
+    return scheduleBankHol;
+  }
+  return scheduleStandard;
+}
+
+    
     // ---------- Build next N working-day columns ----------
     function buildDateCols(){
       const start = new Date();
@@ -1067,100 +1132,124 @@
     }
 
     // ---------- Load schedule & build tooltip groups from routes.csv ----------
-    async function loadScheduleFromCSV(){
-      const res = await fetch(
-  CONFIG.ROUTES_CSV_URL + (CONFIG.ROUTES_CSV_URL.includes("?") ? "&" : "?") + "cb=" + Date.now(),
-  { cache:"no-store" }
-);
-      if (!res.ok) throw new Error(`Failed to load Routes sheet (${res.status})`);
+    async function fetchRouteCsv(url){
+  const res = await fetch(
+    url + (url.includes("?") ? "&" : "?") + "cb=" + Date.now(),
+    { cache:"no-store" }
+  );
 
-      const text = await res.text();
-      const rows = parseDelimitedSmart(text);
-      if (rows.length < 2) throw new Error("Routes sheet has no data rows");
+  if (!res.ok) throw new Error(`Failed to load route CSV (${res.status})`);
 
-      const headers = rows[0].map(normaliseHeader);
+  const text = await res.text();
+  const rows = parseDelimitedSmart(text);
 
-      const routeIdx = headers.findIndex(h =>
-        h === "route" || h === "routename" || h === "route name" || h === "routecode" || h === "route_code"
-      );
-      if (routeIdx === -1) throw new Error("Routes sheet must include a 'Route' column");
+  if (rows.length < 2) throw new Error("Route CSV has no data rows");
 
-      const prefixIdx = headers.findIndex(h => h === "prefix");
-      if (prefixIdx === -1) throw new Error("Routes sheet must include a 'prefix' column (postcode prefix/district).");
+  return rows;
+}
 
-      const channelIdx = headers.findIndex(h => h === "channel" || h === "routechannel");
-      if (channelIdx === -1) throw new Error("Routes sheet must include a 'channel' column.");
+function loadScheduleMapFromRows(rows, targetMap, routeDistricts){
+  const headers = rows[0].map(normaliseHeader);
 
-      const dayCols = new Map();
-      headers.forEach((h,i)=>{
-        const idx = weekdayIndexFromName(h);
-        if (idx !== null) dayCols.set(idx, i);
-      });
+  const routeIdx = headers.findIndex(h =>
+    h === "route" || h === "routename" || h === "route name" || h === "routecode" || h === "route_code"
+  );
+  if (routeIdx === -1) throw new Error("Routes file must include a 'Route' column");
 
-      const deliveryDaysIdx = headers.findIndex(h =>
-        h === "deliverydays" || h === "delivery days" || h === "days" || h === "run days" || h === "rundays"
-      );
+  const prefixIdx = headers.findIndex(h => h === "prefix");
+  if (prefixIdx === -1) throw new Error("Routes file must include a 'prefix' column.");
 
-      schedule.clear();
-      routePostcodeGroups.clear();
+  const channelIdx = headers.findIndex(h => h === "channel" || h === "routechannel");
+  if (channelIdx === -1) throw new Error("Routes file must include a 'channel' column.");
 
-      const routeDistricts = new Map();
-      const targetChannel = String(CONFIG.COMPONENT_CHANNEL_NAME || "").trim().toLowerCase();
+  const dayCols = new Map();
+  headers.forEach((h,i)=>{
+    const idx = weekdayIndexFromName(h);
+    if (idx !== null) dayCols.set(idx, i);
+  });
 
-      for (let r=1; r<rows.length; r++){
-        const row = rows[r];
+  const deliveryDaysIdx = headers.findIndex(h =>
+    h === "deliverydays" || h === "delivery days" || h === "days" || h === "run days" || h === "rundays"
+  );
 
-        const channel = String(row[channelIdx] || "").trim().toLowerCase();
-        if (targetChannel && channel !== targetChannel) continue;
+  const targetChannel = String(CONFIG.COMPONENT_CHANNEL_NAME || "").trim().toLowerCase();
 
-        const route = String(row[routeIdx] || "").trim();
-        if (!route) continue;
+  for (let r=1; r<rows.length; r++){
+    const row = rows[r];
 
-        if (route.toUpperCase().startsWith("3PLCO")) continue;
-        if (route.length <= 5) continue;
+    const channel = String(row[channelIdx] || "").trim().toLowerCase();
+    if (targetChannel && channel !== targetChannel) continue;
 
-        let days = new Set();
-        if (dayCols.size >= 5){
-          for (const [w,col] of dayCols.entries()){
-            if (truthy(row[col])) days.add(w);
-          }
-        } else if (deliveryDaysIdx !== -1){
-          days = parseDeliveryDaysString(row[deliveryDaysIdx]);
-        } else {
-          continue;
-        }
+    const route = String(row[routeIdx] || "").trim();
+    if (!route) continue;
 
-        if (days.size){
-          if (!schedule.has(route)){
-            schedule.set(route, days);
-          } else {
-            const existing = schedule.get(route);
-            if (!setsEqual(existing, days)){
-              console.warn(
-                `[Routes sheet] Conflicting schedules for route "${route}" on row ${r+1}. Keeping first.`,
-                { existing: weekdaysToText(existing), incoming: weekdaysToText(days), row: row }
-              );
-              // Keep existing schedule
-            }
-          }
-        }
+    if (route.toUpperCase().startsWith("3PLCO")) continue;
+    if (route.length <= 5) continue;
 
-        const prefixCell = row[prefixIdx];
-        if (!routeDistricts.has(route)) routeDistricts.set(route, []);
-        routeDistricts.get(route).push(...extractDistrictsFromPrefixCell(prefixCell));
+    let days = new Set();
+
+    if (dayCols.size >= 5){
+      for (const [w,col] of dayCols.entries()){
+        if (truthy(row[col])) days.add(w);
       }
+    } else if (deliveryDaysIdx !== -1){
+      days = parseDeliveryDaysString(row[deliveryDaysIdx]);
+    } else {
+      continue;
+    }
 
-      if (schedule.size === 0){
-        throw new Error(
-          `No route schedules inferred from Routes sheet for channel "${CONFIG.COMPONENT_CHANNEL_NAME}".`
-        );
-      }
-
-      for (const [route, districts] of routeDistricts.entries()){
-        const grouped = groupDistrictsToRanges(districts);
-        routePostcodeGroups.set(route, grouped);
+    if (days.size){
+      if (!targetMap.has(route)){
+        targetMap.set(route, days);
+      } else {
+        const existing = targetMap.get(route);
+        if (!setsEqual(existing, days)){
+          console.warn(
+            `[Routes file] Conflicting schedules for route "${route}" on row ${r+1}. Keeping first.`,
+            { existing: weekdaysToText(existing), incoming: weekdaysToText(days), row }
+          );
+        }
       }
     }
+
+    const prefixCell = row[prefixIdx];
+    if (!routeDistricts.has(route)) routeDistricts.set(route, []);
+    routeDistricts.get(route).push(...extractDistrictsFromPrefixCell(prefixCell));
+  }
+}
+
+async function loadScheduleFromCSV(){
+  scheduleStandard.clear();
+  scheduleBankHol.clear();
+  routePostcodeGroups.clear();
+
+  const routeDistricts = new Map();
+
+  const standardRows = await fetchRouteCsv(CONFIG.ROUTES_CSV_URL);
+  loadScheduleMapFromRows(standardRows, scheduleStandard, routeDistricts);
+
+  // Only load bank holiday routes if schedule dates exist.
+  if (bankHolScheduleDates.size){
+    try{
+      const bankHolRows = await fetchRouteCsv(CONFIG.BANK_HOL_ROUTES_CSV_URL);
+      loadScheduleMapFromRows(bankHolRows, scheduleBankHol, routeDistricts);
+    }catch(err){
+      console.warn("Bank holiday routes file could not be loaded. Falling back to normal routes.", err);
+      scheduleBankHol.clear();
+    }
+  }
+
+  if (scheduleStandard.size === 0){
+    throw new Error(
+      `No route schedules inferred from Routes sheet for channel "${CONFIG.COMPONENT_CHANNEL_NAME}".`
+    );
+  }
+
+  for (const [route, districts] of routeDistricts.entries()){
+    const grouped = groupDistrictsToRanges(districts);
+    routePostcodeGroups.set(route, grouped);
+  }
+}
 
     // ---------- Load overrides from API ----------
     async function loadOverrides(fromISO, toISO){
@@ -1215,7 +1304,10 @@
       gridEl.innerHTML = "";
       cellByKey.clear();
 
-      const routes = Array.from(schedule.keys())
+      const routes = Array.from(new Set([
+  ...scheduleStandard.keys(),
+  ...scheduleBankHol.keys()
+]))
         .sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
 
       const thead = document.createElement("thead");
@@ -1271,10 +1363,15 @@
       });
 
       for (const c of dateCols){
-        const th = document.createElement("th");
-        th.innerHTML = `${weekdayLabel(c.date)}<br>${displayDate(c.date)}`;
-        hr.appendChild(th);
-      }
+  const th = document.createElement("th");
+
+  const bankHolMark = isBankHolScheduleDate(c.iso)
+    ? "<br><span style='font-size:10px;font-weight:800;color:#8a5a12;'>BH Schedule</span>"
+    : "";
+
+  th.innerHTML = `${weekdayLabel(c.date)}<br>${displayDate(c.date)}${bankHolMark}`;
+  hr.appendChild(th);
+}
 
       thead.appendChild(hr);
       gridEl.appendChild(thead);
@@ -1313,7 +1410,7 @@
 
         for (const c of dateCols){
           const td = document.createElement("td");
-          const runs = routeRunsOn(route, c.weekday);
+          const runs = routeRunsOn(route, c.weekday, c.iso);
 
           if (!runs){
             td.className = "inactive";
@@ -1434,10 +1531,12 @@
         updateButtons();
 
         await loadBankHolidays();
-        buildDateCols();
+await loadBankHolScheduleDates();
 
-        await loadScheduleFromCSV();
-        await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
+buildDateCols();
+
+await loadScheduleFromCSV();
+await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
 
         buildGrid();
 
@@ -1474,7 +1573,9 @@
       sessionToken = "";
       pending.clear();
       overrides.clear();
-      schedule.clear();
+      scheduleStandard.clear();
+      scheduleBankHol.clear();
+      bankHolScheduleDates.clear();
       bankHolidays.clear();
       dateCols = [];
       cellByKey.clear();
