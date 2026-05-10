@@ -1030,22 +1030,19 @@ async function getMainSearchRows(){
     }
 
     function getOverlayGridStartDate() {
-      const now = new Date();
-      const cutoffHour = 14;
+  const now = new Date();
+  const cutoffHour = 14;
 
-      let today = startOfDay(now);
+  const today = startOfDay(now);
 
-      if (!isWorkingDay(today)) {
-        today = nextWorkingDay(today);
-      }
+  const afterCutoff =
+    (now.getHours() > cutoffHour) ||
+    (now.getHours() === cutoffHour && now.getMinutes() > 0);
 
-      const afterCutoff =
-        (now.getHours() > cutoffHour) ||
-        (now.getHours() === cutoffHour && now.getMinutes() > 0);
+  const first = nextWorkingDay(today);
 
-      const first = nextWorkingDay(today);
-      return afterCutoff ? nextWorkingDay(first) : first;
-    }
+  return afterCutoff ? nextWorkingDay(first) : first;
+}
 
     function buildWorkingDateColsFrom(startDate, n){
       const cols = [];
