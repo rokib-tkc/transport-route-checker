@@ -233,7 +233,96 @@
     }
     .pillWeight{ background: var(--red); color:#fff; border-color: #cc0000; }
     .pillDrops{ background: var(--orange); color:#111; border-color: #d6a100; }
+  .pillAvailable{ background: var(--green); color:#fff; border-color:#00843d; }
 
+.archiveSummary{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin: 0 0 14px;
+}
+
+.archiveSummaryCard{
+  background:#fff;
+  border:1px solid #e0e0e0;
+  border-radius:10px;
+  padding:10px 12px;
+  min-width:160px;
+}
+
+.archiveSummaryLabel{
+  font-size:12px;
+  font-weight:800;
+  color:#444;
+  margin-bottom:4px;
+}
+
+.archiveSummaryValue{
+  font-size:22px;
+  font-weight:900;
+  color:#111;
+}
+
+.archiveSections{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap:14px;
+}
+
+.archiveSection{
+  background:#fff;
+  border:1px solid #e0e0e0;
+  border-radius:10px;
+  overflow:hidden;
+}
+
+.archiveSectionHeader{
+  padding:10px 12px;
+  font-size:14px;
+  font-weight:900;
+  border-bottom:1px solid #e0e0e0;
+}
+
+.archiveSectionHeader.weight{ background:var(--red); color:#fff; }
+.archiveSectionHeader.drops{ background:var(--orange); color:#111; }
+.archiveSectionHeader.available{ background:var(--green); color:#fff; }
+
+.archiveRouteList{
+  width:100%;
+  border-collapse:collapse;
+}
+
+.archiveRouteList td{
+  border-bottom:1px solid #eee;
+  padding:9px 11px;
+  font-size:13px;
+  text-align:left;
+}
+
+.archiveEmpty{
+  padding:12px;
+  font-size:13px;
+  color:#555;
+  background:#fff;
+}
+
+.archiveWarning{
+  margin-top:12px;
+  padding:10px 12px;
+  border:1px solid #e5d28a;
+  background:#fff8dc;
+  border-radius:10px;
+  font-size:13px;
+  color:#4a3b00;
+}
+
+@media (max-width: 900px){
+  .archiveSections{
+    grid-template-columns: 1fr;
+  }
+}
+
+    
     .overlayCloseBtn{
       background: transparent;
       color: #0078d4;
@@ -654,13 +743,14 @@
 
       <div class="overlayBody">
         <p class="archiveNote" id="archiveNote">
-          Select a past date to view which routes were marked as <b>Full</b> (Weight / Drops). Routes not listed were not marked as full.
-        </p>
+  Select a past date to view all routes that operated on that date, grouped by their recorded status.
+</p>
 
-        <div class="legend" style="justify-content:flex-start;margin:0 0 12px">
-          <span class="chip"><span class="dot" style="background:var(--red)"></span> Full - On Weight</span>
-          <span class="chip"><span class="dot" style="background:var(--orange)"></span> Full - On Drops</span>
-        </div>
+<div class="legend" style="justify-content:flex-start;margin:0 0 12px">
+  <span class="chip"><span class="dot" style="background:var(--red)"></span> Full - On Weight</span>
+  <span class="chip"><span class="dot" style="background:var(--orange)"></span> Full - On Drops</span>
+  <span class="chip"><span class="dot" style="background:var(--green)"></span> Available</span>
+</div>
 
         <div class="archiveDateHeading hidden" id="archiveHeading"></div>
 
@@ -1685,95 +1775,210 @@ await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
 
 
     function statusPillHTML(status){
-      if (status === STATUS.FULL_WEIGHT) return `<span class="pill pillWeight">${STATUS.FULL_WEIGHT}</span>`;
-      if (status === STATUS.FULL_DROPS) return `<span class="pill pillDrops">${STATUS.FULL_DROPS}</span>`;
-      return `<span class="pill">${status}</span>`;
-    }
+  if (status === STATUS.FULL_WEIGHT) return `<span class="pill pillWeight">${STATUS.FULL_WEIGHT}</span>`;
+  if (status === STATUS.FULL_DROPS) return `<span class="pill pillDrops">${STATUS.FULL_DROPS}</span>`;
+  if (status === STATUS.AVAILABLE) return `<span class="pill pillAvailable">${STATUS.AVAILABLE}</span>`;
+  return `<span class="pill">${escapeHTML(status)}</span>`;
+}
+
+    function getArchiveScheduledRoutesForDate(dateISO){
+  const d = new Date(dateISO + "T00:00:00");
+  const wd = d.getDay();
+
+  const isBHSchedule = isBankHolScheduleDate(dateISO);
+  const isClosedCalendarDay = isWeekend(wd) || bankHolidays.has(dateISO);
+
+  // If it is a weekend/bank holiday and there is no explicit BH schedule for that date,
+  // treat it as no scheduled route operation.
+  if (isClosedCalendarDay && !isBHSchedule){
+    return [];
+  }
+
+  const activeSchedule = getScheduleForDate(dateISO);
+
+  return Array.from(activeSchedule.keys())
+    .filter(route => routeRunsOn(route, wd, dateISO))
+    .sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
+}
 
     async function loadArchiveForDate(dateISO){
-      // Spinner for archive load too (removes "Loading..." spam)
-      setLoading(true, "Loading archive…", "Fetching saved closures for the selected date.");
+  setLoading(true, "Loading archive…", "Building the route status view for the selected date.");
 
-      archiveMsgEl.textContent = "";
-      archiveHeadingEl.classList.add("hidden");
-      archiveWrapEl.classList.add("hidden");
-      archiveTableEl.innerHTML = "";
+  archiveMsgEl.textContent = "";
+  archiveHeadingEl.classList.add("hidden");
+  archiveWrapEl.classList.add("hidden");
+  archiveTableEl.innerHTML = "";
 
-      if (!isISODate(dateISO)){
-        setLoading(false);
-        archiveMsgEl.textContent = "Please select a valid date.";
-        return;
-      }
+  if (!isISODate(dateISO)){
+    setLoading(false);
+    archiveMsgEl.textContent = "Please select a valid date.";
+    return;
+  }
 
-      const earliestLive = dateCols.length ? dateCols[0].iso : null;
-      if (earliestLive && dateISO >= earliestLive){
-        setLoading(false);
-        archiveMsgEl.textContent = "Please select a date that is not in the current Live view.";
-        return;
-      }
+  const earliestLive = dateCols.length ? dateCols[0].iso : null;
+  if (earliestLive && dateISO >= earliestLive){
+    setLoading(false);
+    archiveMsgEl.textContent = "Please select a date that is not in the current Live view.";
+    return;
+  }
 
-      try{
-        const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(dateISO)}&to=${encodeURIComponent(dateISO)}`;
-        const res = await fetch(url, { cache:"no-store" });
-        const data = await res.json().catch(()=>null);
-        if (!data || !data.ok) throw new Error((data && data.error) ? data.error : "API error");
+  try{
+    const scheduledRoutes = getArchiveScheduledRoutesForDate(dateISO);
 
-        const rows = (data.rows || [])
-          .map(r => ({
-            route: String(r.route || "").trim(),
-            status: String(r.status || "").trim()
-          }))
-          .filter(r => r.route && (r.status === STATUS.FULL_WEIGHT || r.status === STATUS.FULL_DROPS))
-          .sort((a,b)=>a.route.localeCompare(b.route,"en-GB",{numeric:true,sensitivity:"base"}));
+    const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(dateISO)}&to=${encodeURIComponent(dateISO)}`;
+    const res = await fetch(url, { cache:"no-store" });
+    const data = await res.json().catch(()=>null);
 
-        const display = (() => {
-          const d = new Date(dateISO + "T00:00:00");
-          return d.toLocaleDateString("en-GB",{ weekday:"long", year:"numeric", month:"long", day:"numeric" });
-        })();
+    if (!data || !data.ok){
+      throw new Error((data && data.error) ? data.error : "API error");
+    }
 
-        archiveHeadingEl.textContent = `Route closures for ${display}`;
-        archiveHeadingEl.classList.remove("hidden");
+    const closureMap = new Map();
 
-        let html = `
-          <thead>
-            <tr>
-              <th style="width:70%">Route</th>
-              <th style="width:30%">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-        `;
+    for (const row of (data.rows || [])){
+      const route = String(row.route || "").trim();
+      const status = String(row.status || "").trim();
 
-        if (!rows.length){
-          html += `
-            <tr>
-              <td colspan="2" style="text-align:left;padding:14px 12px;background:#fff">
-                No routes were marked as <b>Full</b> on this date.
-              </td>
-            </tr>
-          `;
-        } else {
-          for (const r of rows){
-            html += `
-              <tr>
-                <td>${escapeHTML(r.route)}</td>
-                <td style="text-align:left">${statusPillHTML(r.status)}</td>
-              </tr>
-            `;
-          }
-        }
+      if (!route) continue;
 
-        html += `</tbody>`;
-        archiveTableEl.innerHTML = html;
-        archiveWrapEl.classList.remove("hidden");
-
-        setLoading(false);
-      }catch(err){
-        setLoading(false);
-        archiveMsgEl.textContent = `Error: ${String(err.message || err)}`;
-        console.error(err);
+      if (status === STATUS.FULL_WEIGHT || status === STATUS.FULL_DROPS){
+        closureMap.set(route, status);
       }
     }
+
+    const fullWeight = [];
+    const fullDrops = [];
+    const available = [];
+    const unscheduledClosures = [];
+
+    for (const route of scheduledRoutes){
+      const st = closureMap.get(route) || STATUS.AVAILABLE;
+
+      if (st === STATUS.FULL_WEIGHT) fullWeight.push(route);
+      else if (st === STATUS.FULL_DROPS) fullDrops.push(route);
+      else available.push(route);
+    }
+
+    // Safety check: if the archive contains closures for routes that are not currently
+    // scheduled according to the current route files, show them separately as a warning.
+    for (const [route, status] of closureMap.entries()){
+      if (!scheduledRoutes.includes(route)){
+        unscheduledClosures.push({ route, status });
+      }
+    }
+
+    const display = (() => {
+      const d = new Date(dateISO + "T00:00:00");
+      return d.toLocaleDateString("en-GB",{ weekday:"long", year:"numeric", month:"long", day:"numeric" });
+    })();
+
+    const bhMark = isBankHolScheduleDate(dateISO)
+      ? " – BH Schedule"
+      : "";
+
+    archiveHeadingEl.textContent = `Route status archive for ${display}${bhMark}`;
+    archiveHeadingEl.classList.remove("hidden");
+
+    function buildRouteRows(routes){
+      if (!routes.length){
+        return `<div class="archiveEmpty">No routes in this section.</div>`;
+      }
+
+      return `
+        <table class="archiveRouteList">
+          <tbody>
+            ${routes.map(route => `
+              <tr>
+                <td>${escapeHTML(route)}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    let html = "";
+
+    html += `
+      <div class="archiveSummary">
+        <div class="archiveSummaryCard">
+          <div class="archiveSummaryLabel">Total operated routes</div>
+          <div class="archiveSummaryValue">${scheduledRoutes.length}</div>
+        </div>
+
+        <div class="archiveSummaryCard">
+          <div class="archiveSummaryLabel">Full - On Weight</div>
+          <div class="archiveSummaryValue">${fullWeight.length}</div>
+        </div>
+
+        <div class="archiveSummaryCard">
+          <div class="archiveSummaryLabel">Full - On Drops</div>
+          <div class="archiveSummaryValue">${fullDrops.length}</div>
+        </div>
+
+        <div class="archiveSummaryCard">
+          <div class="archiveSummaryLabel">Available</div>
+          <div class="archiveSummaryValue">${available.length}</div>
+        </div>
+      </div>
+    `;
+
+    if (!scheduledRoutes.length){
+      html += `
+        <div class="archiveEmpty">
+          No scheduled routes were found for this date based on the current route schedule files.
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="archiveSections">
+          <div class="archiveSection">
+            <div class="archiveSectionHeader weight">Full - On Weight (${fullWeight.length})</div>
+            ${buildRouteRows(fullWeight)}
+          </div>
+
+          <div class="archiveSection">
+            <div class="archiveSectionHeader drops">Full - On Drops (${fullDrops.length})</div>
+            ${buildRouteRows(fullDrops)}
+          </div>
+
+          <div class="archiveSection">
+            <div class="archiveSectionHeader available">Available (${available.length})</div>
+            ${buildRouteRows(available)}
+          </div>
+        </div>
+      `;
+    }
+
+    if (unscheduledClosures.length){
+      html += `
+        <div class="archiveWarning">
+          <b>Note:</b> ${unscheduledClosures.length} saved closure record(s) were found for routes that do not appear to be scheduled on this date using the current route files:
+          <br><br>
+          ${unscheduledClosures.map(r => `${escapeHTML(r.route)} – ${statusPillHTML(r.status)}`).join("<br>")}
+        </div>
+      `;
+    }
+
+    archiveTableEl.innerHTML = `
+      <tbody>
+        <tr>
+          <td style="border:0;padding:0;background:#fafafa;text-align:left">
+            ${html}
+          </td>
+        </tr>
+      </tbody>
+    `;
+
+    archiveWrapEl.classList.remove("hidden");
+    setLoading(false);
+
+  }catch(err){
+    setLoading(false);
+    archiveMsgEl.textContent = `Error: ${String(err.message || err)}`;
+    console.error(err);
+  }
+}
 
     function escapeHTML(s){
       return String(s ?? "")
