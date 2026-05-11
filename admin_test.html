@@ -731,12 +731,13 @@
   <div class="overlay hidden" id="archiveOverlay" aria-modal="true" role="dialog">
     <div class="overlayPanel">
       <div class="overlayHeader">
-        <div class="overlayTitle">Archive – Route Closures</div>
+        <div class="overlayTitle">Archive – Route Status</div>
 
         <div class="overlayControls">
           <label for="archiveDate">Select date</label>
           <input type="date" id="archiveDate" />
           <button class="btn" id="archiveGoBtn">Proceed</button>
+          <button class="btn" id="archiveExportBtn" disabled>Export Excel</button>
           <button class="overlayCloseBtn" id="archiveCloseBtn">Close</button>
         </div>
       </div>
@@ -802,7 +803,8 @@ BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
     let currentRouteFilter = ""; // route string, or "" for all
     let routeFilterSelectEl = null;
     let routeFilterClearEl = null;
-
+    let latestArchiveExportData = null;
+    
     const gateEl = document.getElementById("gate");
     const appEl = document.getElementById("app");
     const controlsEl = document.getElementById("controls");
@@ -828,6 +830,7 @@ BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
     const archiveOverlayEl = document.getElementById("archiveOverlay");
     const archiveDateEl = document.getElementById("archiveDate");
     const archiveGoBtn = document.getElementById("archiveGoBtn");
+    const archiveExportBtn = document.getElementById("archiveExportBtn");
     const archiveCloseBtn = document.getElementById("archiveCloseBtn");
     const archiveTableEl = document.getElementById("archiveTable");
     const archiveWrapEl = document.getElementById("archiveWrap");
@@ -854,6 +857,7 @@ BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
 
       // also avoid overlay interaction while busy
       archiveGoBtn.disabled = isLoading;
+      archiveExportBtn.disabled = isLoading || !latestArchiveExportData;
       archiveCloseBtn.disabled = false;
       archiveDateEl.disabled = isLoading;
 
@@ -1746,6 +1750,8 @@ await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
       archiveHeadingEl.classList.add("hidden");
       archiveWrapEl.classList.add("hidden");
       archiveTableEl.innerHTML = "";
+      latestArchiveExportData = null;
+      archiveExportBtn.disabled = true;
 
       const max = archiveDateEl.max || "";
       if (max){
@@ -1810,17 +1816,22 @@ await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
   archiveTableEl.innerHTML = "";
 
   if (!isISODate(dateISO)){
-    setLoading(false);
-    archiveMsgEl.textContent = "Please select a valid date.";
-    return;
-  }
+  latestArchiveExportData = null;
+  archiveExportBtn.disabled = true;
+  setLoading(false);
+  archiveMsgEl.textContent = "Please select a valid date.";
+  return;
+}
 
-  const earliestLive = dateCols.length ? dateCols[0].iso : null;
-  if (earliestLive && dateISO >= earliestLive){
-    setLoading(false);
-    archiveMsgEl.textContent = "Please select a date that is not in the current Live view.";
-    return;
-  }
+const earliestLive = dateCols.length ? dateCols[0].iso : null;
+
+if (earliestLive && dateISO >= earliestLive){
+  latestArchiveExportData = null;
+  archiveExportBtn.disabled = true;
+  setLoading(false);
+  archiveMsgEl.textContent = "Please select a date that is not in the current Live view.";
+  return;
+}
 
   try{
     const scheduledRoutes = getArchiveScheduledRoutesForDate(dateISO);
@@ -1960,6 +1971,19 @@ await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
       `;
     }
 
+    latestArchiveExportData = {
+  dateISO,
+  display,
+  bhSchedule: isBankHolScheduleDate(dateISO),
+  totalRoutes: scheduledRoutes.length,
+  fullWeight,
+  fullDrops,
+  available,
+  unscheduledClosures
+};
+
+archiveExportBtn.disabled = false;
+
     archiveTableEl.innerHTML = `
       <tbody>
         <tr>
@@ -1980,6 +2004,91 @@ await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
   }
 }
 
+
+    function csvEscape(value){
+  const s = String(value ?? "");
+  return `"${s.replaceAll('"', '""')}"`;
+}
+
+function downloadTextFile(filename, content, mimeType){
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportArchiveToExcel(){
+  if (!latestArchiveExportData){
+    archiveMsgEl.textContent = "Please load an archive date before exporting.";
+    return;
+  }
+
+  const data = latestArchiveExportData;
+  const rows = [];
+
+  rows.push(["Route Status Archive"]);
+  rows.push(["Date", data.display]);
+  rows.push(["Schedule Type", data.bhSchedule ? "BH Schedule" : "Standard Schedule"]);
+  rows.push([]);
+
+  rows.push(["Summary"]);
+  rows.push(["Status", "Route Count"]);
+  rows.push(["Full - On Weight", data.fullWeight.length]);
+  rows.push(["Full - On Drops", data.fullDrops.length]);
+  rows.push(["Available", data.available.length]);
+  rows.push(["Total Operated Routes", data.totalRoutes]);
+  rows.push([]);
+
+  rows.push(["Full - On Weight"]);
+  rows.push(["Route", "Status"]);
+  data.fullWeight.forEach(route => rows.push([route, STATUS.FULL_WEIGHT]));
+  if (!data.fullWeight.length) rows.push(["No routes", ""]);
+  rows.push([]);
+
+  rows.push(["Full - On Drops"]);
+  rows.push(["Route", "Status"]);
+  data.fullDrops.forEach(route => rows.push([route, STATUS.FULL_DROPS]));
+  if (!data.fullDrops.length) rows.push(["No routes", ""]);
+  rows.push([]);
+
+  rows.push(["Available"]);
+  rows.push(["Route", "Status"]);
+  data.available.forEach(route => rows.push([route, STATUS.AVAILABLE]));
+  if (!data.available.length) rows.push(["No routes", ""]);
+
+  if (data.unscheduledClosures && data.unscheduledClosures.length){
+    rows.push([]);
+    rows.push(["Unscheduled Closure Records"]);
+    rows.push(["Route", "Status", "Note"]);
+
+    data.unscheduledClosures.forEach(r => {
+      rows.push([
+        r.route,
+        r.status,
+        "Closure record exists, but route is not scheduled on this date using current route files"
+      ]);
+    });
+  }
+
+  const csv = "\uFEFF" + rows
+    .map(row => row.map(csvEscape).join(","))
+    .join("\r\n");
+
+  const safeDate = data.dateISO.replaceAll("-", "");
+  const filename = `Route_Status_Archive_${safeDate}.csv`;
+
+  downloadTextFile(filename, csv, "text/csv;charset=utf-8;");
+}
+
+
+    
     function escapeHTML(s){
       return String(s ?? "")
         .replaceAll("&","&amp;")
@@ -2027,6 +2136,8 @@ await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
       const d = (archiveDateEl.value || "").trim();
       loadArchiveForDate(d);
     });
+
+    archiveExportBtn.addEventListener("click", exportArchiveToExcel);
 
     archiveDateEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter"){
