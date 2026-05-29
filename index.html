@@ -1030,22 +1030,19 @@ async function getMainSearchRows(){
     }
 
     function getOverlayGridStartDate() {
-      const now = new Date();
-      const cutoffHour = 14;
+  const now = new Date();
+  const cutoffHour = 14;
 
-      let today = startOfDay(now);
+  const today = startOfDay(now);
 
-      if (!isWorkingDay(today)) {
-        today = nextWorkingDay(today);
-      }
+  const afterCutoff =
+    (now.getHours() > cutoffHour) ||
+    (now.getHours() === cutoffHour && now.getMinutes() > 0);
 
-      const afterCutoff =
-        (now.getHours() > cutoffHour) ||
-        (now.getHours() === cutoffHour && now.getMinutes() > 0);
+  const first = nextWorkingDay(today);
 
-      const first = nextWorkingDay(today);
-      return afterCutoff ? nextWorkingDay(first) : first;
-    }
+  return afterCutoff ? nextWorkingDay(first) : first;
+}
 
     function buildWorkingDateColsFrom(startDate, n){
       const cols = [];
@@ -1567,53 +1564,57 @@ async function performSearch() {
     setLoading(false);
 
     (async () => {
-      let allVisibleCols = [];
+  try {
+    const sourceBundle = await getRowsForDateCols([]);
 
-      try {
-        const grouped = groupByChannel(matchingRows);
-        const channels = Object.keys(grouped);
+    const grouped = groupByChannel(matchingRows);
+    const channels = Object.keys(grouped).sort();
 
-        let globalFromISO = null;
-        let globalToISO = null;
+    let globalFromISO = null;
+    let globalToISO = null;
 
-        for (const channel of channels) {
-          const rowsForChannel = grouped[channel];
+    for (const channel of channels) {
+      const rowsForChannel = grouped[channel];
 
-          const leadTime = rowsForChannel[0].leadTime;
-          const allDays = sortDays([...new Set(rowsForChannel.flatMap(r => r.days))]);
+      const route = rowsForChannel[0].route;
+      const leadTime = rowsForChannel[0].leadTime;
+      const prefix = rowsForChannel[0].prefix;
 
-          const nextDate = findNextDeliveryDate(allDays, leadTime);
-          const stripStart = nextDate || getStartDateConsideringCutoff();
-          const cols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
+      const nextDate = findNextDeliveryDateMixed({
+        sourceBundle,
+        route,
+        channel,
+        prefix,
+        leadTimeText: leadTime
+      });
 
-          allVisibleCols.push(...cols);
+      const stripStart = nextDate || getStartDateConsideringCutoff();
+      const cols = buildWorkingDateColsFrom(stripStart, CONFIG.DAYS_AHEAD);
 
-          if (cols.length) {
-            const fromISO = cols[0].iso;
-            const toISO = cols[cols.length - 1].iso;
+      if (cols.length) {
+        const fromISO = cols[0].iso;
+        const toISO = cols[cols.length - 1].iso;
 
-            if (!globalFromISO || fromISO < globalFromISO) globalFromISO = fromISO;
-            if (!globalToISO || toISO > globalToISO) globalToISO = toISO;
-          }
-        }
-
-        if (globalFromISO && globalToISO) {
-          await loadOverridesForRange(globalFromISO, globalToISO);
-        }
-
-      } catch (apiErr) {
-        console.warn("Route status API not available. Showing default strips:", apiErr);
+        if (!globalFromISO || fromISO < globalFromISO) globalFromISO = fromISO;
+        if (!globalToISO || toISO > globalToISO) globalToISO = toISO;
       }
+    }
 
-      const uniqueCols = Array.from(
-        new Map(allVisibleCols.map(c => [c.iso, c])).values()
-      );
+    if (globalFromISO && globalToISO) {
+      await loadOverridesForRange(globalFromISO, globalToISO);
+    }
 
-      const sourceBundle = await getRowsForDateCols(uniqueCols);
+    updateChannelSummaryTablesMixed(matchingRows, sourceBundle);
+    await populateStripsMixed(matchingRows, sourceBundle);
 
-updateChannelSummaryTablesMixed(matchingRows, sourceBundle);
-await populateStripsMixed(matchingRows, sourceBundle);
-    })();
+  } catch (apiErr) {
+    console.warn("Route status API not available. Showing default strips:", apiErr);
+
+    const sourceBundle = await getRowsForDateCols([]);
+    updateChannelSummaryTablesMixed(matchingRows, sourceBundle);
+    await populateStripsMixed(matchingRows, sourceBundle);
+  }
+})();
 
   } catch (err) {
     console.error("Error during search:", err);
