@@ -874,6 +874,7 @@ BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
     function addDays(date, days){ const d = new Date(date); d.setDate(d.getDate()+days); return d; }
     function weekdayLabel(d){ return d.toLocaleDateString("en-GB",{weekday:"short"}); }
     function displayDate(d){ return `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${String(d.getFullYear()).slice(-2)}`; }
+    function currentClosureStamp(){const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; }
     function key(dateISO, route){ return `${dateISO}||${route}`; }
     function normaliseHeader(h){ return String(h||"").trim().toLowerCase(); }
     function isISODate(s){ return /^\d{4}-\d{2}-\d{2}$/.test(String(s||"").trim()); }
@@ -1521,13 +1522,23 @@ async function loadScheduleFromCSV(){
             sel.value = overrides.get(k) || STATUS.AVAILABLE;
 
             sel.addEventListener("change", () => {
-              pending.set(k, { date: c.iso, route, status: sel.value });
-              updateButtons();
-              applyCellStyle(td, c.iso, route);
+              const change = {
+              date: c.iso,
+              route,
+              status: sel.value
+            };
 
-              // Keep this (important) message in the status bar
-              setStatus(`Pending: ${route} on ${c.iso} --> ${sel.value}`);
-            });
+            if (sel.value === STATUS.FULL_WEIGHT || sel.value === STATUS.FULL_DROPS) {
+              change.closureAt = currentClosureStamp();
+            }
+
+            pending.set(k, change);
+
+            updateButtons();
+            applyCellStyle(td, c.iso, route);
+
+            setStatus(`Pending: ${route} on ${c.iso} --> ${sel.value}`);
+          });
 
             td.appendChild(sel);
             applyCellStyle(td, c.iso, route);
