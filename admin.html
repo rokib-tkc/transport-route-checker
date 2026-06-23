@@ -506,6 +506,57 @@
     .fullDrops{background: var(--orange)}
     .pendingOutline{outline:3px solid #00000022;outline-offset:-3px}
 
+    .statusSelectWrap{
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.closureTooltip{
+  display: none;
+}
+
+.floatingClosureTooltip{
+  position: fixed;
+  z-index: 2147483647;
+  min-width: 190px;
+  max-width: 280px;
+  background: #ffffff;
+  color: #111;
+  border: 1px solid #cfcfcf;
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.20);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+  pointer-events: none;
+}
+
+.floatingClosureTooltip::after{
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #ffffff transparent transparent transparent;
+}
+
+.closureTooltipTitle{
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.closureTooltipLine{
+  font-size: 12px;
+  font-weight: 700;
+  color: #333;
+}
+    
     select{
       width: 100%;
       border: 0;
@@ -580,7 +631,14 @@
 
     /* ---------- TOOLTIP LAYER FIX ---------- */
     tbody{ position: relative; z-index: 1; }
-    tbody tr:hover{ position: relative; z-index: 50; }
+    tbody tr:hover{ position: relative; z-index: 5000; }
+    tbody tr:hover td{ position: relative; z-index: 5001; }
+
+    td:has(.statusSelectWrap:hover){
+      position: relative;
+      z-index: 99999;
+    }
+
     td.routeCell:hover{ z-index: 200; }
     .routeName:hover{ z-index: 300; }
 
@@ -1003,12 +1061,147 @@ BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
   return days ? days.has(weekdayIndex) : false;
 }
 
-    function getEffectiveStatus(dateISO, route){
-      const k = key(dateISO, route);
-      if (pending.has(k)) return pending.get(k).status;
-      if (overrides.has(k)) return overrides.get(k);
-      return STATUS.AVAILABLE;
-    }
+    function getEffectiveOverride(dateISO, route){
+  const k = key(dateISO, route);
+
+  const saved = overrides.get(k) || {
+    status: STATUS.AVAILABLE,
+    dropsClosure: "",
+    weightClosure: ""
+  };
+
+  if (!pending.has(k)) return saved;
+
+  const p = pending.get(k);
+
+  if (p.status === STATUS.AVAILABLE) {
+    return {
+      status: STATUS.AVAILABLE,
+      dropsClosure: "",
+      weightClosure: ""
+    };
+  }
+
+  if (p.status === STATUS.FULL_DROPS) {
+    return {
+      status: STATUS.FULL_DROPS,
+      dropsClosure: saved.dropsClosure || p.closureAt || "",
+      weightClosure: ""
+    };
+  }
+
+  if (p.status === STATUS.FULL_WEIGHT) {
+    return {
+      status: STATUS.FULL_WEIGHT,
+      dropsClosure: saved.dropsClosure || "",
+      weightClosure: saved.weightClosure || p.closureAt || ""
+    };
+  }
+
+  return saved;
+}
+
+function getEffectiveStatus(dateISO, route){
+  return getEffectiveOverride(dateISO, route).status;
+}
+
+    function displayClosureStamp(stamp){
+  const s = String(stamp || "").trim();
+  if (!s) return "";
+
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (m) {
+    return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}${m[6] ? ":" + m[6] : ""}`;
+  }
+
+  return s;
+}
+
+function getClosureTooltipHTML(dateISO, route){
+  const info = getEffectiveOverride(dateISO, route);
+
+  if (info.status === STATUS.AVAILABLE) return "";
+
+  const drops = displayClosureStamp(info.dropsClosure);
+  const weight = displayClosureStamp(info.weightClosure);
+
+  if (!drops && !weight) return "";
+
+  let html = `<div class="closureTooltipTitle">Route closure time</div>`;
+
+  if (drops) {
+    html += `<div class="closureTooltipLine">Drops: ${escapeHTML(drops)}</div>`;
+  }
+
+  if (weight) {
+    html += `<div class="closureTooltipLine">Weight: ${escapeHTML(weight)}</div>`;
+  }
+
+  return html;
+}
+
+function refreshClosureTooltip(td, dateISO, route){
+  const tip = td.querySelector(".closureTooltip");
+  if (!tip) return;
+
+  const html = getClosureTooltipHTML(dateISO, route);
+
+  if (html) {
+    tip.innerHTML = html;
+    tip.classList.remove("hidden");
+  } else {
+    tip.innerHTML = "";
+    tip.classList.add("hidden");
+  }
+}
+
+    let floatingClosureTooltipEl = null;
+
+function getFloatingClosureTooltipEl(){
+  if (floatingClosureTooltipEl) return floatingClosureTooltipEl;
+
+  floatingClosureTooltipEl = document.createElement("div");
+  floatingClosureTooltipEl.className = "floatingClosureTooltip hidden";
+  document.body.appendChild(floatingClosureTooltipEl);
+
+  return floatingClosureTooltipEl;
+}
+
+function showFloatingClosureTooltip(html, anchorEl){
+  if (!html || !anchorEl) return;
+
+  const tip = getFloatingClosureTooltipEl();
+  tip.innerHTML = html;
+  tip.classList.remove("hidden");
+
+  const rect = anchorEl.getBoundingClientRect();
+
+  // Temporarily display so size can be measured
+  tip.style.left = "0px";
+  tip.style.top = "0px";
+
+  const tipRect = tip.getBoundingClientRect();
+
+  let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
+  let top = rect.top - tipRect.height - 10;
+
+  // If too close to top, show below the cell instead
+  if (top < 8) {
+    top = rect.bottom + 10;
+  }
+
+  // Keep inside screen horizontally
+  left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+
+function hideFloatingClosureTooltip(){
+  const tip = getFloatingClosureTooltipEl();
+  tip.classList.add("hidden");
+  tip.innerHTML = "";
+}
 
     function applyCellStyle(td, dateISO, route){
       td.classList.remove("inactive","runAvailable","fullWeight","fullDrops","pendingOutline");
@@ -1028,6 +1221,8 @@ BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
       else td.classList.add("runAvailable");
 
       if (pending.has(key(dateISO, route))) td.classList.add("pendingOutline");
+
+      refreshClosureTooltip(td, dateISO, route);
     }
 
     function setSelectValueInCell(td, value){
@@ -1358,10 +1553,18 @@ async function loadScheduleFromCSV(){
         const date = String(row.date || "").trim();
         const route = String(row.route || "").trim();
         const status = String(row.status || "").trim();
-        if (!date || !route || !status) continue;
-        overrides.set(key(date, route), status);
-      }
+        const dropsClosure = String(row.dropsClosure || "").trim();
+        const weightClosure = String(row.weightClosure || "").trim();
+
+      if (!date || !route || !status) continue;
+
+      overrides.set(key(date, route), {
+        status,
+        dropsClosure,
+        weightClosure
+      });
     }
+  }
 
     // ---------- Route filter apply ----------
     function applyRouteFilter(){
@@ -1519,7 +1722,8 @@ async function loadScheduleFromCSV(){
             `;
 
             const k = key(c.iso, route);
-            sel.value = overrides.get(k) || STATUS.AVAILABLE;
+            const savedOverride = overrides.get(k);
+            sel.value = savedOverride ? savedOverride.status : STATUS.AVAILABLE;
 
             sel.addEventListener("change", () => {
               const change = {
@@ -1540,7 +1744,26 @@ async function loadScheduleFromCSV(){
             setStatus(`Pending: ${route} on ${c.iso} --> ${sel.value}`);
           });
 
-            td.appendChild(sel);
+            const statusWrap = document.createElement("div");
+            statusWrap.className = "statusSelectWrap";
+
+            const closureTooltip = document.createElement("div");
+            closureTooltip.className = "closureTooltip hidden";
+
+            statusWrap.appendChild(sel);
+            statusWrap.appendChild(closureTooltip);
+
+            statusWrap.addEventListener("mouseenter", () => {
+              const html = getClosureTooltipHTML(c.iso, route);
+            showFloatingClosureTooltip(html, statusWrap);
+          });
+
+            statusWrap.addEventListener("mouseleave", () => {
+              hideFloatingClosureTooltip();
+          });
+
+          td.appendChild(statusWrap);
+
             applyCellStyle(td, c.iso, route);
             cellByKey.set(k, td);
           }
@@ -1569,7 +1792,8 @@ async function loadScheduleFromCSV(){
 
       for (const [k, td] of cellByKey.entries()){
         const [dateISO, route] = k.split("||");
-        const st = overrides.get(k) || STATUS.AVAILABLE;
+        const savedOverride = overrides.get(k);
+        const st = savedOverride ? savedOverride.status : STATUS.AVAILABLE;
         setSelectValueInCell(td, st);
         applyCellStyle(td, dateISO, route);
       }
@@ -1613,7 +1837,8 @@ async function loadScheduleFromCSV(){
 
         for (const [k, td] of cellByKey.entries()){
           const [dateISO, route] = k.split("||");
-          const st = overrides.get(k) || STATUS.AVAILABLE;
+          const savedOverride = overrides.get(k);
+          const st = savedOverride ? savedOverride.status : STATUS.AVAILABLE;
           setSelectValueInCell(td, st);
           applyCellStyle(td, dateISO, route);
         }
@@ -2177,8 +2402,3 @@ function exportArchiveToExcel(){
   </script>
 </body>
 </html>
-
-
-
-
-
