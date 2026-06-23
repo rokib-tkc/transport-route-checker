@@ -464,6 +464,51 @@
     .gridFullWeight{ background: var(--red); color:#8a1f1f; font-weight:700; }
     .gridFullDrops{ background: var(--orange); color:#8a5a12; font-weight:700; }
 
+    .statusClosureHover{
+  cursor: help;
+}
+
+.floatingClosureTooltip{
+  position: fixed;
+  z-index: 2147483647;
+  min-width: 190px;
+  max-width: 280px;
+  background: #ffffff;
+  color: #111;
+  border: 1px solid #cfcfcf;
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.20);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: left;
+  pointer-events: none;
+}
+
+.floatingClosureTooltip::after{
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #ffffff transparent transparent transparent;
+}
+
+.closureTooltipTitle{
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+
+.closureTooltipLine{
+  font-size: 12px;
+  font-weight: 700;
+  color: #333;
+}
+    
     /* Tooltip (postcode groups) */
     .routeName{
       position: relative;
@@ -1125,20 +1170,127 @@ async function getMainSearchRows(){
     function ovKey(dateISO, route){ return `${dateISO}||${route}`; }
 
     async function loadOverridesForRange(fromISO, toISO){
-      overridesMap.clear();
-      const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`;
-      const res = await fetch(url, { cache: "no-store" });
-      const data = await res.json().catch(()=>null);
-      if (!data || !data.ok) throw new Error(`API failed: ${(data && data.error) ? data.error : "Unknown error"}`);
+  overridesMap.clear();
 
-      for (const row of (data.rows || [])){
-        const date = String(row.date || "").trim();
-        const route = String(row.route || "").trim();
-        const status = String(row.status || "").trim();
-        if (!date || !route || !status) continue;
-        overridesMap.set(ovKey(date, route), status);
-      }
-    }
+  const url = `${CONFIG.API_URL}?action=get&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`;
+  const res = await fetch(url, { cache: "no-store" });
+  const data = await res.json().catch(()=>null);
+
+  if (!data || !data.ok) {
+    throw new Error(`API failed: ${(data && data.error) ? data.error : "Unknown error"}`);
+  }
+
+  for (const row of (data.rows || [])){
+    const date = String(row.date || "").trim();
+    const route = String(row.route || "").trim();
+    const status = String(row.status || "").trim();
+    const dropsClosure = String(row.dropsClosure || "").trim();
+    const weightClosure = String(row.weightClosure || "").trim();
+
+    if (!date || !route || !status) continue;
+
+    overridesMap.set(ovKey(date, route), {
+      status,
+      dropsClosure,
+      weightClosure
+    });
+  }
+}
+
+
+    function getOverrideInfo(dateISO, route){
+  return overridesMap.get(ovKey(dateISO, route)) || {
+    status: STATUS.AVAILABLE,
+    dropsClosure: "",
+    weightClosure: ""
+  };
+}
+
+function getOverrideStatus(dateISO, route){
+  return getOverrideInfo(dateISO, route).status;
+}
+
+function displayClosureStamp(stamp){
+  const s = String(stamp || "").trim();
+  if (!s) return "";
+
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (m) {
+    return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}${m[6] ? ":" + m[6] : ""}`;
+  }
+
+  return s;
+}
+
+function getClosureTooltipHTML(dateISO, route){
+  const info = getOverrideInfo(dateISO, route);
+
+  if (info.status !== STATUS.FULL_WEIGHT && info.status !== STATUS.FULL_DROPS) return "";
+
+  const drops = displayClosureStamp(info.dropsClosure);
+  const weight = displayClosureStamp(info.weightClosure);
+
+  if (!drops && !weight) return "";
+
+  let html = `<div class="closureTooltipTitle">Route closure time</div>`;
+
+  if (drops) {
+    html += `<div class="closureTooltipLine">Drops: ${escapeHTML(drops)}</div>`;
+  }
+
+  if (weight) {
+    html += `<div class="closureTooltipLine">Weight: ${escapeHTML(weight)}</div>`;
+  }
+
+  return html;
+}
+
+let floatingClosureTooltipEl = null;
+
+function getFloatingClosureTooltipEl(){
+  if (floatingClosureTooltipEl) return floatingClosureTooltipEl;
+
+  floatingClosureTooltipEl = document.createElement("div");
+  floatingClosureTooltipEl.className = "floatingClosureTooltip";
+  floatingClosureTooltipEl.style.display = "none";
+  document.body.appendChild(floatingClosureTooltipEl);
+
+  return floatingClosureTooltipEl;
+}
+
+function showFloatingClosureTooltip(html, anchorEl){
+  if (!html || !anchorEl) return;
+
+  const tip = getFloatingClosureTooltipEl();
+  tip.innerHTML = html;
+  tip.style.display = "block";
+
+  const rect = anchorEl.getBoundingClientRect();
+
+  tip.style.left = "0px";
+  tip.style.top = "0px";
+
+  const tipRect = tip.getBoundingClientRect();
+
+  let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
+  let top = rect.top - tipRect.height - 10;
+
+  if (top < 8) {
+    top = rect.bottom + 10;
+  }
+
+  left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+
+function hideFloatingClosureTooltip(){
+  const tip = getFloatingClosureTooltipEl();
+  tip.style.display = "none";
+  tip.innerHTML = "";
+}
+    
 
     // ============================================================
     // STATUS STRIP LOGIC (View-only, channel rule wins)
@@ -1208,7 +1360,7 @@ function buildStatusStripHTMLMixed({ route, channel, prefix, leadTimeText, dateC
     const runDays = getRunDaysForRouteOnDate(sourceBundle, c.iso, route, channel, prefix);
     const runs = routeRunsOnDayName(runDays, c.date);
     const isClosed = runs && (startOfDay(c.date) < startOfDay(earliest));
-    const ov = overridesMap.get(ovKey(c.iso, route));
+    const ov = getOverrideStatus(c.iso, route);
 
     const { cls, text } = classifyStatusCell({
       runs,
@@ -1810,6 +1962,22 @@ async function performSearch() {
       return (n in map) ? map[n] : null;
     }
 
+
+    function attachOverlayClosureTooltipEvents(){
+  const cells = gridEl.querySelectorAll(".statusClosureHover");
+
+  cells.forEach(cell => {
+    cell.addEventListener("mouseenter", () => {
+      const html = cell.getAttribute("data-closure-html") || "";
+      showFloatingClosureTooltip(html, cell);
+    });
+
+    cell.addEventListener("mouseleave", () => {
+      hideFloatingClosureTooltip();
+    });
+  });
+}
+    
     async function loadRoutesOverlay(force){
   try{
     showOverlayLoading(true);
@@ -1940,23 +2108,37 @@ async function performSearch() {
           continue;
         }
 
-        const ov = overridesMap.get(ovKey(c.iso, route));
+        const ovInfo = getOverrideInfo(c.iso, route);
+        const ov = ovInfo.status;
 
         let cls = "gridAvailable";
         let txt = STATUS.AVAILABLE;
+        let hoverClass = "";
+        let closureHTML = "";
 
         if (ov === STATUS.FULL_WEIGHT){
-          cls = "gridFullWeight";
-          txt = STATUS.FULL_WEIGHT;
-        } else if (ov === STATUS.FULL_DROPS){
-          cls = "gridFullDrops";
-          txt = STATUS.FULL_DROPS;
-        } else if (ov === STATUS.AVAILABLE){
-          cls = "gridAvailable";
-          txt = STATUS.AVAILABLE;
-        }
+  cls = "gridFullWeight";
+  txt = STATUS.FULL_WEIGHT;
+  hoverClass = "statusClosureHover";
+  closureHTML = getClosureTooltipHTML(c.iso, route);
+} else if (ov === STATUS.FULL_DROPS){
+  cls = "gridFullDrops";
+  txt = STATUS.FULL_DROPS;
+  hoverClass = "statusClosureHover";
+  closureHTML = getClosureTooltipHTML(c.iso, route);
+} else if (ov === STATUS.AVAILABLE){
+  cls = "gridAvailable";
+  txt = STATUS.AVAILABLE;
+}
 
-        html += `<td class="${cls}">${escapeHTML(txt)}</td>`;
+html += `
+  <td
+    class="${cls} ${hoverClass}"
+    data-closure-html="${escapeHTML(closureHTML)}"
+  >
+    ${escapeHTML(txt)}
+  </td>
+`;
       }
 
       html += `</tr>`;
@@ -1968,6 +2150,7 @@ async function performSearch() {
     gridWrapEl.style.display = "block";
     showOverlayLoading(false);
 
+    attachOverlayClosureTooltipEvents();
     adjustAllRouteTooltips();
 
   }catch(err){
