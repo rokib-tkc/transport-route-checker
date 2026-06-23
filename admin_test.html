@@ -517,7 +517,7 @@
   left: 50%;
   bottom: calc(100% + 8px);
   transform: translateX(-50%) translateY(4px);
-  z-index: 9999;
+  z-index: 100000;
 
   min-width: 190px;
   max-width: 260px;
@@ -641,7 +641,14 @@
 
     /* ---------- TOOLTIP LAYER FIX ---------- */
     tbody{ position: relative; z-index: 1; }
-    tbody tr:hover{ position: relative; z-index: 50; }
+    tbody tr:hover{ position: relative; z-index: 5000; }
+    tbody tr:hover td{ position: relative; z-index: 5001; }
+
+    td:has(.statusSelectWrap:hover){
+      position: relative;
+      z-index: 99999;
+    }
+
     td.routeCell:hover{ z-index: 200; }
     .routeName:hover{ z-index: 300; }
 
