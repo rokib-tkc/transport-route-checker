@@ -463,6 +463,7 @@
     .gridAvailable{ background: var(--green); color:#1f6b3a; font-weight:700; }
     .gridFullWeight{ background: var(--red); color:#8a1f1f; font-weight:700; }
     .gridFullDrops{ background: var(--orange); color:#8a5a12; font-weight:700; }
+    .gridCutOff{ background: #d9d2e9; color: #351c75; font-weight: 800; }
 
     .statusClosureHover{
   cursor: help;
@@ -702,7 +703,8 @@ CHANNEL_RULES_CSV_URL: "channel_rules.csv",
       AVAILABLE: "Available",
       FULL_WEIGHT: "Full - On Weight",
       FULL_DROPS: "Full - On Drops",
-      CLOSED: "Closed"
+      CLOSED: "Closed",
+      CUT_OFF: "Cut Off"
     };
 
     // ============================================================
@@ -1076,17 +1078,30 @@ async function getMainSearchRows(){
 
     function getOverlayGridStartDate() {
   const now = new Date();
-  const cutoffHour = 14;
+
+  // Overlay stays on the same next delivery date until 3pm.
+  const overlayRollForwardHour = 17;
 
   const today = startOfDay(now);
 
-  const afterCutoff =
-    (now.getHours() > cutoffHour) ||
-    (now.getHours() === cutoffHour && now.getMinutes() > 0);
+  const afterOverlayRollForward =
+    (now.getHours() > overlayRollForwardHour) ||
+    (now.getHours() === overlayRollForwardHour && now.getMinutes() > 0);
 
   const first = nextWorkingDay(today);
 
-  return afterCutoff ? nextWorkingDay(first) : first;
+  return afterOverlayRollForward ? nextWorkingDay(first) : first;
+}
+
+    function isOverlayCutOffGraceWindow(){
+  const now = new Date();
+
+  if (!isWorkingDay(startOfDay(now))) return false;
+
+  const mins = (now.getHours() * 60) + now.getMinutes();
+
+  // From 14:00 through to before 15:00
+  return mins >= (14 * 60) && mins < (17 * 60);
 }
 
     function buildWorkingDateColsFrom(startDate, n){
@@ -2116,6 +2131,10 @@ async function performSearch() {
         let hoverClass = "";
         let closureHTML = "";
 
+        const isCutOffGraceCell =
+          isOverlayCutOffGraceWindow() &&
+          c.iso === dateCols[0].iso;
+
         if (ov === STATUS.FULL_WEIGHT){
   cls = "gridFullWeight";
   txt = STATUS.FULL_WEIGHT;
@@ -2127,8 +2146,20 @@ async function performSearch() {
   hoverClass = "statusClosureHover";
   closureHTML = getClosureTooltipHTML(c.iso, route);
 } else if (ov === STATUS.AVAILABLE){
-  cls = "gridAvailable";
-  txt = STATUS.AVAILABLE;
+  if (isCutOffGraceCell){
+    cls = "gridCutOff";
+    txt = STATUS.CUT_OFF;
+  } else {
+    cls = "gridAvailable";
+    txt = STATUS.AVAILABLE;
+  }
+}
+
+        if (ov !== STATUS.FULL_WEIGHT && ov !== STATUS.FULL_DROPS && ov !== STATUS.AVAILABLE){
+  if (isCutOffGraceCell){
+    cls = "gridCutOff";
+    txt = STATUS.CUT_OFF;
+  }
 }
 
 html += `
