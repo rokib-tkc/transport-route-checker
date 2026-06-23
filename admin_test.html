@@ -507,44 +507,34 @@
     .pendingOutline{outline:3px solid #00000022;outline-offset:-3px}
 
     .statusSelectWrap{
-      position: relative;
-      width: 100%;
-      height: 100%;
-      z-index: 1;
-  }
-
-    .statusSelectWrap:hover{
-      z-index: 100000;
-  }
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
 
 .closureTooltip{
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%) translateY(4px);
-  z-index: 100000;
+  display: none;
+}
 
+.floatingClosureTooltip{
+  position: fixed;
+  z-index: 2147483647;
   min-width: 190px;
-  max-width: 260px;
-
+  max-width: 280px;
   background: #ffffff;
   color: #111;
   border: 1px solid #cfcfcf;
   border-radius: 8px;
   padding: 8px 10px;
-
-  box-shadow: 0 8px 22px rgba(0,0,0,0.16);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.20);
   font-size: 12px;
   font-weight: 700;
   line-height: 1.35;
   text-align: left;
-
-  opacity: 0;
   pointer-events: none;
-  transition: opacity .12s ease, transform .12s ease;
 }
 
-.closureTooltip::after{
+.floatingClosureTooltip::after{
   content: "";
   position: absolute;
   left: 50%;
@@ -553,11 +543,6 @@
   border-width: 6px;
   border-style: solid;
   border-color: #ffffff transparent transparent transparent;
-}
-
-.statusSelectWrap:hover .closureTooltip{
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
 }
 
 .closureTooltipTitle{
@@ -571,7 +556,7 @@
   font-weight: 700;
   color: #333;
 }
-
+    
     select{
       width: 100%;
       border: 0;
@@ -1170,6 +1155,54 @@ function refreshClosureTooltip(td, dateISO, route){
   }
 }
 
+    let floatingClosureTooltipEl = null;
+
+function getFloatingClosureTooltipEl(){
+  if (floatingClosureTooltipEl) return floatingClosureTooltipEl;
+
+  floatingClosureTooltipEl = document.createElement("div");
+  floatingClosureTooltipEl.className = "floatingClosureTooltip hidden";
+  document.body.appendChild(floatingClosureTooltipEl);
+
+  return floatingClosureTooltipEl;
+}
+
+function showFloatingClosureTooltip(html, anchorEl){
+  if (!html || !anchorEl) return;
+
+  const tip = getFloatingClosureTooltipEl();
+  tip.innerHTML = html;
+  tip.classList.remove("hidden");
+
+  const rect = anchorEl.getBoundingClientRect();
+
+  // Temporarily display so size can be measured
+  tip.style.left = "0px";
+  tip.style.top = "0px";
+
+  const tipRect = tip.getBoundingClientRect();
+
+  let left = rect.left + (rect.width / 2) - (tipRect.width / 2);
+  let top = rect.top - tipRect.height - 10;
+
+  // If too close to top, show below the cell instead
+  if (top < 8) {
+    top = rect.bottom + 10;
+  }
+
+  // Keep inside screen horizontally
+  left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+
+function hideFloatingClosureTooltip(){
+  const tip = getFloatingClosureTooltipEl();
+  tip.classList.add("hidden");
+  tip.innerHTML = "";
+}
+
     function applyCellStyle(td, dateISO, route){
       td.classList.remove("inactive","runAvailable","fullWeight","fullDrops","pendingOutline");
 
@@ -1720,7 +1753,16 @@ async function loadScheduleFromCSV(){
             statusWrap.appendChild(sel);
             statusWrap.appendChild(closureTooltip);
 
-            td.appendChild(statusWrap);
+            statusWrap.addEventListener("mouseenter", () => {
+              const html = getClosureTooltipHTML(c.iso, route);
+            showFloatingClosureTooltip(html, statusWrap);
+          });
+
+            statusWrap.addEventListener("mouseleave", () => {
+              hideFloatingClosureTooltip();
+          });
+
+          td.appendChild(statusWrap);
 
             applyCellStyle(td, c.iso, route);
             cellByKey.set(k, td);
