@@ -1080,7 +1080,7 @@ async function getMainSearchRows(){
   const now = new Date();
 
   // Overlay stays on the same next delivery date until 3pm.
-  const overlayRollForwardHour = 17;
+  const overlayRollForwardHour = 15;
 
   const today = startOfDay(now);
 
@@ -1101,7 +1101,7 @@ async function getMainSearchRows(){
   const mins = (now.getHours() * 60) + now.getMinutes();
 
   // From 14:00 through to before 15:00
-  return mins >= (14 * 60) && mins < (17 * 60);
+  return mins >= (14 * 60) && mins < (15 * 60);
 }
 
     function buildWorkingDateColsFrom(startDate, n){
