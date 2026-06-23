@@ -316,6 +316,88 @@
   color:#4a3b00;
 }
 
+    .archiveAnalysis{
+  margin-top:16px;
+  background:#fff;
+  border:1px solid #e0e0e0;
+  border-radius:10px;
+  overflow:hidden;
+}
+
+.archiveAnalysisHeader{
+  padding:11px 13px;
+  background:#f0f0f0;
+  font-size:15px;
+  font-weight:900;
+  border-bottom:1px solid #e0e0e0;
+}
+
+.archiveAnalysisIntro{
+  padding:10px 13px;
+  font-size:13px;
+  color:#333;
+  line-height:1.4;
+  border-bottom:1px solid #eee;
+}
+
+.archiveAnalysisGrid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap:12px;
+  padding:12px;
+}
+
+.archiveAnalysisBlock{
+  border:1px solid #e0e0e0;
+  border-radius:9px;
+  overflow:hidden;
+  background:#fff;
+}
+
+.archiveAnalysisBlockHeader{
+  padding:9px 11px;
+  font-size:13px;
+  font-weight:900;
+  background:#fafafa;
+  border-bottom:1px solid #e0e0e0;
+}
+
+.archiveAnalysisBlockHeader.advance{ background:#d9ead3; }
+.archiveAnalysisBlockHeader.by12{ background:#fff2cc; }
+.archiveAnalysisBlockHeader.by14{ background:#fce5cd; }
+.archiveAnalysisBlockHeader.late{ background:#f4cccc; }
+
+.archiveAnalysisTable{
+  width:100%;
+  border-collapse:collapse;
+}
+
+.archiveAnalysisTable th,
+.archiveAnalysisTable td{
+  border-bottom:1px solid #eee;
+  padding:8px 9px;
+  font-size:12px;
+  text-align:left;
+  vertical-align:top;
+}
+
+.archiveAnalysisTable th{
+  background:#f7f7f7;
+  font-weight:900;
+}
+
+.archiveAnalysisEmpty{
+  padding:10px 11px;
+  font-size:12.5px;
+  color:#555;
+}
+
+@media (max-width: 1100px){
+  .archiveAnalysisGrid{
+    grid-template-columns:1fr;
+  }
+}
+
 @media (max-width: 900px){
   .archiveSections{
     grid-template-columns: 1fr;
@@ -856,6 +938,7 @@ BANK_HOLIDAYS_CSV_URL: "./bank_holidays.csv",
 
     // Tooltip data built per session from routes.csv "prefix" column:
     const routePostcodeGroups = new Map();
+    const routeLeadTimes = new Map();
 
     // Route filter state
     let currentRouteFilter = ""; // route string, or "" for all
@@ -1462,6 +1545,14 @@ function loadScheduleMapFromRows(rows, targetMap, routeDistricts){
     h === "deliverydays" || h === "delivery days" || h === "days" || h === "run days" || h === "rundays"
   );
 
+  const leadTimeIdx = headers.findIndex(h =>
+  h === "leadtime" ||
+  h === "lead time" ||
+  h === "lead_time" ||
+  h === "delivery lead time" ||
+  h === "deliveryleadtime"
+);
+
   const targetChannel = String(CONFIG.COMPONENT_CHANNEL_NAME || "").trim().toLowerCase();
 
   for (let r=1; r<rows.length; r++){
@@ -1472,6 +1563,10 @@ function loadScheduleMapFromRows(rows, targetMap, routeDistricts){
 
     const route = String(row[routeIdx] || "").trim();
     if (!route) continue;
+
+    if (leadTimeIdx !== -1 && !routeLeadTimes.has(route)){
+    routeLeadTimes.set(route, parseLeadTimeValue(row[leadTimeIdx]));
+  }
 
     if (route.toUpperCase().startsWith("3PLCO")) continue;
     if (route.length <= 5) continue;
@@ -1512,6 +1607,7 @@ async function loadScheduleFromCSV(){
   scheduleStandard.clear();
   scheduleBankHol.clear();
   routePostcodeGroups.clear();
+  routeLeadTimes.clear();
 
   const routeDistricts = new Map();
 
@@ -1907,6 +2003,7 @@ await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
       scheduleBankHol.clear();
       bankHolScheduleDates.clear();
       bankHolidays.clear();
+      routeLeadTimes.clear();
       dateCols = [];
       cellByKey.clear();
       currentRouteFilter = "";
@@ -2043,6 +2140,231 @@ await loadOverrides(dateCols[0].iso, dateCols[dateCols.length-1].iso);
     .sort((a,b)=>a.localeCompare(b,"en-GB",{numeric:true,sensitivity:"base"}));
 }
 
+    function parseLeadTimeValue(value){
+  const s = String(value || "").trim().toLowerCase();
+
+  if (!s) return 0;
+  if (s.includes("overnight")) return 1;
+
+  const m = s.match(/\d+/);
+  if (!m) return 0;
+
+  return Number(m[0]) || 0;
+}
+
+function subtractWorkingDaysISO(dateISO, workingDays){
+  let remaining = Number(workingDays || 0);
+
+  const d = new Date(dateISO + "T00:00:00");
+
+  while (remaining > 0){
+    d.setDate(d.getDate() - 1);
+
+    const iso = toISODate(d);
+    const wd = d.getDay();
+
+    if (!isWeekend(wd) && !bankHolidays.has(iso)){
+      remaining--;
+    }
+  }
+
+  return toISODate(d);
+}
+
+function parseClosureDateTime(stamp){
+  const s = String(stamp || "").trim();
+  if (!s) return null;
+
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) return null;
+
+  return new Date(
+    Number(m[1]),
+    Number(m[2]) - 1,
+    Number(m[3]),
+    Number(m[4]),
+    Number(m[5]),
+    Number(m[6] || 0)
+  );
+}
+
+function getFirstClosureInfoFromRow(row){
+  const dropsClosure = String(row.dropsClosure || "").trim();
+  const weightClosure = String(row.weightClosure || "").trim();
+
+  const dropsDate = parseClosureDateTime(dropsClosure);
+  const weightDate = parseClosureDateTime(weightClosure);
+
+  if (dropsDate && weightDate){
+    if (dropsDate <= weightDate){
+      return { closureType:"Drops", closureStamp:dropsClosure, closureDate:dropsDate };
+    }
+
+    return { closureType:"Weight", closureStamp:weightClosure, closureDate:weightDate };
+  }
+
+  if (dropsDate){
+    return { closureType:"Drops", closureStamp:dropsClosure, closureDate:dropsDate };
+  }
+
+  if (weightDate){
+    return { closureType:"Weight", closureStamp:weightClosure, closureDate:weightDate };
+  }
+
+  return { closureType:"", closureStamp:"", closureDate:null };
+}
+
+function formatISODateForDisplay(dateISO){
+  const s = String(dateISO || "").trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return s;
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
+function buildClosureTimingAnalysis(dateISO, scheduledRoutes, closureMap){
+  const analysis = {
+    closed24hAdvance: [],
+    closedBy1200: [],
+    closedBy1400: [],
+    closedAfter1400: [],
+    closedAfterCutoffDay: [],
+    missingClosureTime: []
+  };
+
+  for (const route of scheduledRoutes){
+    const info = closureMap.get(route);
+    if (!info) continue;
+
+    const leadTime = routeLeadTimes.has(route) ? routeLeadTimes.get(route) : 0;
+    const cutoffDateISO = subtractWorkingDaysISO(dateISO, leadTime);
+
+    const base = {
+      route,
+      status: info.status,
+      leadTime,
+      cutoffDateISO,
+      closureType: info.closureType || "",
+      closureStamp: info.closureStamp || "",
+      closureDisplay: displayClosureStamp(info.closureStamp || "")
+    };
+
+    if (!info.closureDate){
+      analysis.missingClosureTime.push(base);
+      continue;
+    }
+
+    const closureDateISO = toISODate(info.closureDate);
+    const closureMinutes = (info.closureDate.getHours() * 60) + info.closureDate.getMinutes();
+
+    if (closureDateISO < cutoffDateISO){
+      analysis.closed24hAdvance.push(base);
+    } else if (closureDateISO === cutoffDateISO && closureMinutes <= 720){
+      analysis.closedBy1200.push(base);
+    } else if (closureDateISO === cutoffDateISO && closureMinutes <= 840){
+      analysis.closedBy1400.push(base);
+    } else if (closureDateISO === cutoffDateISO){
+      analysis.closedAfter1400.push(base);
+    } else {
+      analysis.closedAfterCutoffDay.push(base);
+    }
+  }
+
+  const sorter = (a, b) =>
+    a.route.localeCompare(b.route, "en-GB", { numeric:true, sensitivity:"base" });
+
+  Object.keys(analysis).forEach(k => analysis[k].sort(sorter));
+
+  return analysis;
+}
+
+function buildArchiveTimingRows(items){
+  if (!items.length){
+    return `<div class="archiveAnalysisEmpty">No routes in this section.</div>`;
+  }
+
+  return `
+    <table class="archiveAnalysisTable">
+      <thead>
+        <tr>
+          <th>Route</th>
+          <th>Status</th>
+          <th>Lead Time</th>
+          <th>Cut-off Date</th>
+          <th>Closed By</th>
+          <th>Closure Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${items.map(r => `
+          <tr>
+            <td>${escapeHTML(r.route)}</td>
+            <td>${statusPillHTML(r.status)}</td>
+            <td>${escapeHTML(r.leadTime)} day(s)</td>
+            <td>${escapeHTML(formatISODateForDisplay(r.cutoffDateISO))}</td>
+            <td>${escapeHTML(r.closureType || "-")}</td>
+            <td>${escapeHTML(r.closureDisplay || "-")}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function buildClosureTimingAnalysisHTML(analysis){
+  const extraLateCount = analysis.closedAfter1400.length + analysis.closedAfterCutoffDay.length + analysis.missingClosureTime.length;
+
+  let html = `
+    <div class="archiveAnalysis">
+      <div class="archiveAnalysisHeader">Route Closure Timing Analysis</div>
+
+      <div class="archiveAnalysisIntro">
+        This section uses each route’s lead time to calculate the cut-off date, then groups closed routes by when the first recorded closure occurred.
+      </div>
+
+      <div class="archiveAnalysisGrid">
+        <div class="archiveAnalysisBlock">
+          <div class="archiveAnalysisBlockHeader advance">Closed 24hrs in advance (${analysis.closed24hAdvance.length})</div>
+          ${buildArchiveTimingRows(analysis.closed24hAdvance)}
+        </div>
+
+        <div class="archiveAnalysisBlock">
+          <div class="archiveAnalysisBlockHeader by12">Cut-off day: closed by 12:00 (${analysis.closedBy1200.length})</div>
+          ${buildArchiveTimingRows(analysis.closedBy1200)}
+        </div>
+
+        <div class="archiveAnalysisBlock">
+          <div class="archiveAnalysisBlockHeader by14">Cut-off day: closed by 14:00 (${analysis.closedBy1400.length})</div>
+          ${buildArchiveTimingRows(analysis.closedBy1400)}
+        </div>
+      </div>
+  `;
+
+  if (extraLateCount){
+    html += `
+      <div class="archiveAnalysisGrid">
+        <div class="archiveAnalysisBlock">
+          <div class="archiveAnalysisBlockHeader late">Cut-off day: closed after 14:00 (${analysis.closedAfter1400.length})</div>
+          ${buildArchiveTimingRows(analysis.closedAfter1400)}
+        </div>
+
+        <div class="archiveAnalysisBlock">
+          <div class="archiveAnalysisBlockHeader late">Closed after cut-off day (${analysis.closedAfterCutoffDay.length})</div>
+          ${buildArchiveTimingRows(analysis.closedAfterCutoffDay)}
+        </div>
+
+        <div class="archiveAnalysisBlock">
+          <div class="archiveAnalysisBlockHeader late">Closure time missing (${analysis.missingClosureTime.length})</div>
+          ${buildArchiveTimingRows(analysis.missingClosureTime)}
+        </div>
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+
+  return html;
+}
+
     async function loadArchiveForDate(dateISO){
   setLoading(true, "Loading archive…", "Building the route status view for the selected date.");
 
@@ -2082,16 +2404,25 @@ if (earliestLive && dateISO >= earliestLive){
 
     const closureMap = new Map();
 
-    for (const row of (data.rows || [])){
-      const route = String(row.route || "").trim();
-      const status = String(row.status || "").trim();
+for (const row of (data.rows || [])){
+  const route = String(row.route || "").trim();
+  const status = String(row.status || "").trim();
 
-      if (!route) continue;
+  if (!route) continue;
 
-      if (status === STATUS.FULL_WEIGHT || status === STATUS.FULL_DROPS){
-        closureMap.set(route, status);
-      }
-    }
+  if (status === STATUS.FULL_WEIGHT || status === STATUS.FULL_DROPS){
+    const firstClosure = getFirstClosureInfoFromRow(row);
+
+    closureMap.set(route, {
+      status,
+      dropsClosure: String(row.dropsClosure || "").trim(),
+      weightClosure: String(row.weightClosure || "").trim(),
+      closureType: firstClosure.closureType,
+      closureStamp: firstClosure.closureStamp,
+      closureDate: firstClosure.closureDate
+    });
+  }
+}
 
     const fullWeight = [];
     const fullDrops = [];
@@ -2099,21 +2430,26 @@ if (earliestLive && dateISO >= earliestLive){
     const unscheduledClosures = [];
 
     for (const route of scheduledRoutes){
-      const st = closureMap.get(route) || STATUS.AVAILABLE;
+  const info = closureMap.get(route);
+  const st = info ? info.status : STATUS.AVAILABLE;
 
-      if (st === STATUS.FULL_WEIGHT) fullWeight.push(route);
-      else if (st === STATUS.FULL_DROPS) fullDrops.push(route);
-      else available.push(route);
-    }
+  if (st === STATUS.FULL_WEIGHT) fullWeight.push(route);
+  else if (st === STATUS.FULL_DROPS) fullDrops.push(route);
+  else available.push(route);
+}
 
     // Safety check: if the archive contains closures for routes that are not currently
     // scheduled according to the current route files, show them separately as a warning.
-    for (const [route, status] of closureMap.entries()){
+    for (const [route, info] of closureMap.entries()){
       if (!scheduledRoutes.includes(route)){
-        unscheduledClosures.push({ route, status });
+        unscheduledClosures.push({
+          route,
+          status: info.status,
+          closureType: info.closureType || "",
+          closureStamp: info.closureStamp || ""
+        });
       }
-    }
-
+  }
     const display = (() => {
       const d = new Date(dateISO + "T00:00:00");
       return d.toLocaleDateString("en-GB",{ weekday:"long", year:"numeric", month:"long", day:"numeric" });
@@ -2197,6 +2533,10 @@ if (earliestLive && dateISO >= earliestLive){
       `;
     }
 
+    const closureTimingAnalysis = buildClosureTimingAnalysis(dateISO, scheduledRoutes, closureMap);
+
+    html += buildClosureTimingAnalysisHTML(closureTimingAnalysis);
+
     if (unscheduledClosures.length){
       html += `
         <div class="archiveWarning">
@@ -2208,15 +2548,16 @@ if (earliestLive && dateISO >= earliestLive){
     }
 
     latestArchiveExportData = {
-  dateISO,
-  display,
-  bhSchedule: isBankHolScheduleDate(dateISO),
-  totalRoutes: scheduledRoutes.length,
-  fullWeight,
-  fullDrops,
-  available,
-  unscheduledClosures
-};
+      dateISO,
+      display,
+      bhSchedule: isBankHolScheduleDate(dateISO),
+      totalRoutes: scheduledRoutes.length,
+      fullWeight,
+      fullDrops,
+      available,
+      unscheduledClosures,
+      closureTimingAnalysis
+    };
 
 archiveExportBtn.disabled = false;
 
@@ -2298,6 +2639,54 @@ function exportArchiveToExcel(){
   rows.push(["Route", "Status"]);
   data.available.forEach(route => rows.push([route, STATUS.AVAILABLE]));
   if (!data.available.length) rows.push(["No routes", ""]);
+
+  rows.push([]);
+
+rows.push(["Route Closure Timing Analysis"]);
+rows.push([
+  "Group",
+  "Route",
+  "Status",
+  "Lead Time",
+  "Cut-off Date",
+  "Closure Type",
+  "Closure Time"
+]);
+
+function pushTimingRows(groupName, items){
+  if (!items || !items.length){
+    rows.push([groupName, "No routes", "", "", "", "", ""]);
+    return;
+  }
+
+  items.forEach(r => {
+    rows.push([
+      groupName,
+      r.route,
+      r.status,
+      `${r.leadTime} day(s)`,
+      formatISODateForDisplay(r.cutoffDateISO),
+      r.closureType || "",
+      r.closureDisplay || ""
+    ]);
+  });
+}
+
+const timing = data.closureTimingAnalysis || {
+  closed24hAdvance: [],
+  closedBy1200: [],
+  closedBy1400: [],
+  closedAfter1400: [],
+  closedAfterCutoffDay: [],
+  missingClosureTime: []
+};
+
+pushTimingRows("Closed 24hrs in advance", timing.closed24hAdvance);
+pushTimingRows("Cut-off day: closed by 12:00", timing.closedBy1200);
+pushTimingRows("Cut-off day: closed by 14:00", timing.closedBy1400);
+pushTimingRows("Cut-off day: closed after 14:00", timing.closedAfter1400);
+pushTimingRows("Closed after cut-off day", timing.closedAfterCutoffDay);
+pushTimingRows("Closure time missing", timing.missingClosureTime);
 
   if (data.unscheduledClosures && data.unscheduledClosures.length){
     rows.push([]);
@@ -2402,3 +2791,8 @@ function exportArchiveToExcel(){
   </script>
 </body>
 </html>
+
+
+
+
+
