@@ -342,7 +342,7 @@
 
 .archiveAnalysisGrid{
   display:grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap:12px;
   padding:12px;
 }
@@ -354,6 +354,14 @@
   background:#fff;
 }
 
+    .archiveAnalysisBlock{
+  border:1px solid #e0e0e0;
+  border-radius:9px;
+  overflow:hidden;
+  background:#fff;
+  min-width:0;
+}
+
 .archiveAnalysisBlockHeader{
   padding:9px 11px;
   font-size:13px;
@@ -363,6 +371,7 @@
 }
 
 .archiveAnalysisBlockHeader.advance{ background:#d9ead3; }
+.archiveAnalysisBlockHeader.by10{ background:#d9eaf7; }
 .archiveAnalysisBlockHeader.by12{ background:#fff2cc; }
 .archiveAnalysisBlockHeader.by14{ background:#fce5cd; }
 .archiveAnalysisBlockHeader.late{ background:#f4cccc; }
@@ -392,7 +401,7 @@
   color:#555;
 }
 
-@media (max-width: 1100px){
+@media (max-width: 750px){
   .archiveAnalysisGrid{
     grid-template-columns:1fr;
   }
@@ -2223,13 +2232,14 @@ function formatISODateForDisplay(dateISO){
 
 function buildClosureTimingAnalysis(dateISO, scheduledRoutes, closureMap){
   const analysis = {
-    closed24hAdvance: [],
-    closedBy1200: [],
-    closedBy1400: [],
-    closedAfter1400: [],
-    closedAfterCutoffDay: [],
-    missingClosureTime: []
-  };
+  closed24hAdvance: [],
+  closedBy1000: [],
+  closedBy1200: [],
+  closedBy1400: [],
+  closedAfter1400: [],
+  closedAfterCutoffDay: [],
+  missingClosureTime: []
+};
 
   for (const route of scheduledRoutes){
     const info = closureMap.get(route);
@@ -2257,16 +2267,35 @@ function buildClosureTimingAnalysis(dateISO, scheduledRoutes, closureMap){
     const closureMinutes = (info.closureDate.getHours() * 60) + info.closureDate.getMinutes();
 
     if (closureDateISO < cutoffDateISO){
-      analysis.closed24hAdvance.push(base);
-    } else if (closureDateISO === cutoffDateISO && closureMinutes <= 720){
-      analysis.closedBy1200.push(base);
-    } else if (closureDateISO === cutoffDateISO && closureMinutes <= 840){
-      analysis.closedBy1400.push(base);
-    } else if (closureDateISO === cutoffDateISO){
-      analysis.closedAfter1400.push(base);
-    } else {
-      analysis.closedAfterCutoffDay.push(base);
-    }
+  analysis.closed24hAdvance.push(base);
+
+} else if (
+  closureDateISO === cutoffDateISO &&
+  closureMinutes <= 600
+){
+  // Up to and including 10:00
+  analysis.closedBy1000.push(base);
+
+} else if (
+  closureDateISO === cutoffDateISO &&
+  closureMinutes <= 720
+){
+  // After 10:00, up to and including 12:00
+  analysis.closedBy1200.push(base);
+
+} else if (
+  closureDateISO === cutoffDateISO &&
+  closureMinutes <= 840
+){
+  // After 12:00, up to and including 14:00
+  analysis.closedBy1400.push(base);
+
+} else if (closureDateISO === cutoffDateISO){
+  analysis.closedAfter1400.push(base);
+
+} else {
+  analysis.closedAfterCutoffDay.push(base);
+}
   }
 
   const sorter = (a, b) =>
@@ -2322,21 +2351,34 @@ function buildClosureTimingAnalysisHTML(analysis){
       </div>
 
       <div class="archiveAnalysisGrid">
-        <div class="archiveAnalysisBlock">
-          <div class="archiveAnalysisBlockHeader advance">Closed 24hrs in advance (${analysis.closed24hAdvance.length})</div>
-          ${buildArchiveTimingRows(analysis.closed24hAdvance)}
-        </div>
+  <div class="archiveAnalysisBlock">
+    <div class="archiveAnalysisBlockHeader advance">
+      Closed 24hrs in advance (${analysis.closed24hAdvance.length})
+    </div>
+    ${buildArchiveTimingRows(analysis.closed24hAdvance)}
+  </div>
 
-        <div class="archiveAnalysisBlock">
-          <div class="archiveAnalysisBlockHeader by12">Cut-off day: closed by 12:00 (${analysis.closedBy1200.length})</div>
-          ${buildArchiveTimingRows(analysis.closedBy1200)}
-        </div>
+  <div class="archiveAnalysisBlock">
+    <div class="archiveAnalysisBlockHeader by10">
+      Cut-off day: closed by 10:00 (${analysis.closedBy1000.length})
+    </div>
+    ${buildArchiveTimingRows(analysis.closedBy1000)}
+  </div>
 
-        <div class="archiveAnalysisBlock">
-          <div class="archiveAnalysisBlockHeader by14">Cut-off day: closed by 14:00 (${analysis.closedBy1400.length})</div>
-          ${buildArchiveTimingRows(analysis.closedBy1400)}
-        </div>
-      </div>
+  <div class="archiveAnalysisBlock">
+    <div class="archiveAnalysisBlockHeader by12">
+      Cut-off day: closed by 12:00 (${analysis.closedBy1200.length})
+    </div>
+    ${buildArchiveTimingRows(analysis.closedBy1200)}
+  </div>
+
+  <div class="archiveAnalysisBlock">
+    <div class="archiveAnalysisBlockHeader by14">
+      Cut-off day: closed by 14:00 (${analysis.closedBy1400.length})
+    </div>
+    ${buildArchiveTimingRows(analysis.closedBy1400)}
+  </div>
+</div>
   `;
 
   if (extraLateCount){
@@ -2674,6 +2716,7 @@ function pushTimingRows(groupName, items){
 
 const timing = data.closureTimingAnalysis || {
   closed24hAdvance: [],
+  closedBy1000: [],
   closedBy1200: [],
   closedBy1400: [],
   closedAfter1400: [],
@@ -2681,12 +2724,40 @@ const timing = data.closureTimingAnalysis || {
   missingClosureTime: []
 };
 
-pushTimingRows("Closed 24hrs in advance", timing.closed24hAdvance);
-pushTimingRows("Cut-off day: closed by 12:00", timing.closedBy1200);
-pushTimingRows("Cut-off day: closed by 14:00", timing.closedBy1400);
-pushTimingRows("Cut-off day: closed after 14:00", timing.closedAfter1400);
-pushTimingRows("Closed after cut-off day", timing.closedAfterCutoffDay);
-pushTimingRows("Closure time missing", timing.missingClosureTime);
+pushTimingRows(
+  "Closed 24hrs in advance",
+  timing.closed24hAdvance
+);
+
+pushTimingRows(
+  "Cut-off day: closed by 10:00",
+  timing.closedBy1000
+);
+
+pushTimingRows(
+  "Cut-off day: closed after 10:00 and by 12:00",
+  timing.closedBy1200
+);
+
+pushTimingRows(
+  "Cut-off day: closed after 12:00 and by 14:00",
+  timing.closedBy1400
+);
+
+pushTimingRows(
+  "Cut-off day: closed after 14:00",
+  timing.closedAfter1400
+);
+
+pushTimingRows(
+  "Closed after cut-off day",
+  timing.closedAfterCutoffDay
+);
+
+pushTimingRows(
+  "Closure time missing",
+  timing.missingClosureTime
+);
 
   if (data.unscheduledClosures && data.unscheduledClosures.length){
     rows.push([]);
@@ -2791,7 +2862,6 @@ pushTimingRows("Closure time missing", timing.missingClosureTime);
   </script>
 </body>
 </html>
-
 
 
 
